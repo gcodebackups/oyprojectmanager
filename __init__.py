@@ -1,7 +1,7 @@
 """
 oyProjectManager by Erkan Ozgur Yilmaz (c) 2009
 
-v9.11.7
+v9.11.9
 
 Description :
 -------------
@@ -153,6 +153,10 @@ Command Line Options :
 
 Version History :
 -----------------
+v9.11.9
+- fixed an error, occurred when a new type asset name is send to an old type
+  project
+
 v9.11.7
 - when an asset object is initialized with a wrong file name, guessing the
   fields from file name will result index error, it is now fixed
@@ -559,4 +563,4 @@ TODO List :
 
 
 
-__version__ = "9.11.7"
+__version__ = "9.11.9"

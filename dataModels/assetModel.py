@@ -3,7 +3,7 @@ import oyAuxiliaryFunctions as oyAux
 
 
 
-__version__ = "9.11.7"
+__version__ = "9.11.9"
 
 
 
@@ -203,8 +203,13 @@ class Asset(object):
         
         # get the type object
         self._type = self._parentSequence.getAssetTypeWithName( self._typeName )
-        self._rev = self._parentSequence.convertToRevNumber( self._revString )
-        self._ver = self._parentSequence.convertToVerNumber( self._verString )
+        
+        try:
+            self._rev = self._parentSequence.convertToRevNumber( self._revString )
+            self._ver = self._parentSequence.convertToVerNumber( self._verString )
+        except ValueError:
+            # the pattern is not compatible with the current project
+            return
         
         self._hasFullInfo = self._hasBaseInfo = True
         
