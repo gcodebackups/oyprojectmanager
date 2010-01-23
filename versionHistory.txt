@@ -3,6 +3,8 @@ Version History :
 v10.1.23
 - mayaEnv: fixed setting of the playblast folder path, it should be an absolute
   path to the playblast file
+- assetManager: fixed a little bug in export which causing a little error but,
+  doesn't interrupt the export process
 
 v10.1.19
 - projectModel: fixed a little bug in Sequence class, where it was trying to

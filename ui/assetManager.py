@@ -1238,7 +1238,7 @@ class MainWindow(QtGui.QMainWindow, assetManager_UI.Ui_MainWindow):
                 
                 # inform the user for successful operation
                 
-                QtGui.QMessageBox.information(self, 'Asset Export', 'Asset :\n\n'+ assetObject.getFileName() +'\n\nis exported successfuly', QtGui.QMessageBox.Ok)
+                QtGui.QMessageBox.information(self, 'Asset Export', 'Asset :\n\n'+ self._asset.getFileName() +'\n\nis exported successfuly', QtGui.QMessageBox.Ok)
                 
                 self.close()
     
