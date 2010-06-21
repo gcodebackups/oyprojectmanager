@@ -7,6 +7,7 @@
 				_CAMERAS_
 				_COMPOSITING_/_OUTPUT_
 				_COMPOSITING_/_SHOTS_
+				_FX_
 				_LAYOUT_
 				_ONLINE_
 				_PLAYBLASTS_/_ANIMATION_PLAYBLASTS_
@@ -84,6 +85,7 @@
 			<type name="ILLUSTRATION"  path="_ILLUSTRATION_"            shotDependent="0"  environments="PHOTOSHOP"     playblastFolder="_PLAYBLASTS_/_OTHER_PLAYBLASTS_"/>
 			<type name="MATTE"         path="_MATTE_PAINT_"             shotDependent="0"  environments="PHOTOSHOP"     playblastFolder="_PLAYBLASTS_/_OTHER_PLAYBLASTS_"/>
 			<type name="SHADING"       path="_SHADING_"                 shotDependent="0"  environments="MAYA,HOUDINI"  playblastFolder="_PLAYBLASTS_/_OTHER_PLAYBLASTS_"/>
+			<type name="FX"            path="_FX_"                      shotDependent="0"  environments="MAYA,HOUDINI"  playblastFolder="_PLAYBLASTS_/_OTHER_PLAYBLASTS_"/>
 		</assetTypes>
 		<shotData>
 		</shotData>
