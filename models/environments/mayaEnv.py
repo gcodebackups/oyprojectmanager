@@ -6,7 +6,7 @@ from oyProjectManager.models import asset, project, repository, abstractClasses
 
 
 
-__version__ = "10.6.22"
+__version__ = "10.6.25"
 
 
 
@@ -264,8 +264,8 @@ class MayaEnvironment(abstractClasses.Environment):
         
         playblastFolderPath = self._asset.type.playblastFolder
         
-        if os.name == 'nt':
-            playblastFolderPath = playblastFolderPath.replace('/','\\')
+        #if os.name == 'nt':
+            #playblastFolderPath = playblastFolderPath.replace('/','\\')
         
         assert(isinstance(self._asset, asset.Asset))
         
@@ -273,7 +273,14 @@ class MayaEnvironment(abstractClasses.Environment):
         
         baseName = self._asset.baseName
         
-        playblastFullPath = os.path.join( seqFullPath, playblastFolderPath, baseName, self._asset.fileNameWithoutExtension )
+        playblastPath = os.path.join( seqFullPath, playblastFolderPath, baseName )
+        playblastFullPath = os.path.join( playblastPath, self._asset.fileNameWithoutExtension )
+        
+        # create the folder
+        oyAux.createFolder( playblastPath )
+        
+        playblastFullPath = playblastFullPath.replace('\\','/')
+        #print "playblastFullPath:",playblastFullPath
         
         pm.optionVar['playblastFile'] = playblastFullPath
     
