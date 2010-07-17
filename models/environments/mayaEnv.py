@@ -7,7 +7,7 @@ from oyProjectManager.models import asset, project, repository, abstractClasses
 
 
 
-__version__ = "10.6.28"
+__version__ = "10.7.17"
 
 
 
@@ -254,6 +254,7 @@ class MayaEnvironment(abstractClasses.Environment):
         dRG.setAttr('animation', 1)
         dRG.setAttr('outFormatControl', 0 )
         dRG.setAttr('extensionPadding', 3 )
+        dRG.setAttr('imageFormat', 7 ) # force the format to iff
         dRG.setAttr('pff', 1)
 
 

@@ -8,8 +8,10 @@ global pyFile
 uicFilePaths = []
 pyFilePaths = []
 
-uicFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectManager/ui/assetManager.ui' )
-pyFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectManager/ui/assetManager_UI.py' )
+#uicFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectManager/ui/assetManager.ui' )
+#pyFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectManager/ui/assetManager_UI.py' )
+uicFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectManager/ui/assetManager2.ui' )
+pyFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectManager/ui/assetManager2_UI.py' )
 
 #uicFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectManager/ui/projectManager.ui' )
 #pyFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectManager/ui/projectManager_UI.py' )
@@ -26,6 +28,8 @@ pyFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectM
 #uicFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectManager/ui/assetReplacer.ui' )
 #pyFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectManager/ui/assetReplacer_UI.py' )
 
+#uicFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectManager/ui/saveFields.ui' )
+#pyFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectManager/ui/saveFields_UI.py' )
 
 for i,uicFilePath in enumerate(uicFilePaths):
     uicFile = file( uicFilePath)
