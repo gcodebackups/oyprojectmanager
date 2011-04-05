@@ -370,9 +370,11 @@ class Sequence(object):
         
         self._settingsFile = ".settings.xml"
         self._settingsFilePath = self._fullPath
-        self._settingsFileFullPath = os.path.join( self._settingsFilePath, self._settingsFile )
+        self._settingsFileFullPath = os.path.join(self._settingsFilePath, self._settingsFile)
         self._settingsFileExists = False
         self._settings_dirty = False
+
+        #print self._settingsFileFullPath
         
         self._structure = Structure()
         self._assetTypes = [ asset.AssetType() ] * 0
@@ -557,9 +559,9 @@ class Sequence(object):
                 name = outputNode.getAttribute('name')
                 path = outputNode.getAttribute('path')
                 
-                ## fixe path issues for windows
-                #if osName == 'nt':
-                    #path = oyAux.fixWindowsPath( path )
+                # fixe path issues for windows
+                if osName == 'nt':
+                    path = oyAux.fixWindowsPath( path )
                 
                 # instead add the output folder to the asset types
                 # get the asset type by name and append the path to the
@@ -603,9 +605,9 @@ class Sequence(object):
             output_path = node.getAttribute("output_path")
             
             ## fix path issues for windows
-            #if os.name == 'nt':
-                #path = oyAux.fixWindowsPath(path)
-                #playblastFolder = oyAux.fixWindowsPath(playblastFolder)
+            if os.name == 'nt':
+                path = oyAux.fixWindowsPath(path)
+                playblastFolder = oyAux.fixWindowsPath(playblastFolder)
             
             self._assetTypes.append(
                 asset.AssetType(name, path, shotDependency, playblastFolder,
@@ -821,6 +823,7 @@ class Sequence(object):
             # if there is a settings file backit up
             # keep maximum of 5 backups
             oyAux.backupFile(self._settingsFileFullPath, 5)
+            #print "settingsFileFullPath: ", self._settingsFileFullPath
             settingsFile = open(self._settingsFileFullPath, "w")
         except IOError:
             #print "couldn't open the settings file"

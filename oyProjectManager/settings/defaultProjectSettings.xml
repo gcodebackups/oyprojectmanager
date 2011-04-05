@@ -13,7 +13,7 @@
                 PLAYBLASTS/ANIMATION_PLAYBLASTS
                 PLAYBLASTS/PREVIS_PLAYBLASTS
                 PREVIS
-                RENDERED_IMAGES/SHOTS
+                RENDERED_IMAGES
                 RENDER_SCENES
             </shotDependent>
             <shotIndependent>
