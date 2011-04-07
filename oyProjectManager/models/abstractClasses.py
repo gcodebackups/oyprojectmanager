@@ -1,7 +1,4 @@
-
-
-
-__version__ = "10.4.28"
+# -*- coding: utf-8 -*-
 
 
 
@@ -87,7 +84,7 @@ class Environment(object):
     def save(self):
         """the save action
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -95,7 +92,7 @@ class Environment(object):
     def export(self):
         """the export action
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -103,7 +100,7 @@ class Environment(object):
     def open_(self, force=False):
         """the open action
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -111,7 +108,7 @@ class Environment(object):
     def import_(self):
         """the import action
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -119,7 +116,7 @@ class Environment(object):
     def reference(self):
         """the reference action
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -127,7 +124,7 @@ class Environment(object):
     def getPathVariables(self):
         """gets the file name from environment
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -135,7 +132,7 @@ class Environment(object):
     def getProject(self):
         """returns the current project from environment
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -144,7 +141,7 @@ class Environment(object):
         """sets the project and sequence names, thus the working environment
         of the current environment
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -152,7 +149,7 @@ class Environment(object):
     def setOutputFileName(self):
         """sets the output file names
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -160,7 +157,7 @@ class Environment(object):
     def appendToRecentFiles(self, path):
         """appends the given path to the recent files list
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -170,7 +167,7 @@ class Environment(object):
         
         returns list of asset objects
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -180,7 +177,7 @@ class Environment(object):
         
         returns list of asset objects
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -188,7 +185,7 @@ class Environment(object):
     def updateAssets(self, assetTupleList):
         """updates the assets to the latest versions
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -196,7 +193,7 @@ class Environment(object):
     def getFrameRange(self):
         """returns the frame range from the environment
         """
-        return None, None
+        raise NotImplemented
     
     
     
@@ -204,7 +201,7 @@ class Environment(object):
     def setFrameRange(self, startFrame=1, endFrame=100):
         """sets the frame range in the environment
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -212,7 +209,7 @@ class Environment(object):
     def getTimeUnit(self):
         """returns the time unit of the environment
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -220,7 +217,7 @@ class Environment(object):
     def setTimeUnit(self, timeUnit='pal' ):
         """sets the frame rate of the environment
         """
-        pass
+        raise NotImplemented
         
     
     
@@ -267,7 +264,7 @@ class Environment(object):
     def loadReferences(self):
         """loads all the references
         """
-        pass
+        raise NotImplemented
     
     
     
@@ -275,5 +272,5 @@ class Environment(object):
     def replaceAssets(self, sourceAsset, targetAsset):
         """replaces the source asset with the target asset
         """
-        pass
+        raise NotImplemented
     

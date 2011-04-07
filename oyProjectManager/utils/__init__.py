@@ -1,8 +1,9 @@
-#coding:utf-8
+# -*- coding: utf-8 -*-
 
 
 
 import os, itertools, re
+
 
 
 #----------------------------------------------------------------------
@@ -15,6 +16,7 @@ def all_equal(elements):
         if other_element != first_element: return False
     
     return True
+
 
 
 #----------------------------------------------------------------------
@@ -36,6 +38,7 @@ def common_prefix(*sequences):
     
     # return the common prefix and unique tails
     return common, [sequence[len(common):] for sequence in sequences]
+
 
 
 #----------------------------------------------------------------------

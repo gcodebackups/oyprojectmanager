@@ -1,8 +1,12 @@
-import oyAuxiliaryFunctions as oyAux
+# -*- coding: utf-8 -*-
+
+
+
 import re
+import oyAuxiliaryFunctions as oyAux
 
 
-__version__ = "9.10.5"
+
 
 
 

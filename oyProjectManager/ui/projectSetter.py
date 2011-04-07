@@ -1,15 +1,19 @@
+# -*- coding: utf-8 -*-
+
+
+
+import sys
 from PyQt4 import QtGui, QtCore
 from oyProjectManager.ui import singletonQApplication, projectSetter_UI
 from oyProjectManager.models import project, repository
 from oyProjectManager.models.environments import environmentFactory
-import sys
 
 
 
-__version__ = '10.6.17'
 
 
 
+#----------------------------------------------------------------------
 def setProject(environmentName, insist=False):
     """a wrapper function to make it easy to set projects in all environments
     """
@@ -34,6 +38,7 @@ def setProject(environmentName, insist=False):
 
 
 
+#----------------------------------------------------------------------
 def UI(environmentName=None):
     """the UI to call the dialog by itself
     """

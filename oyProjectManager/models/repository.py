@@ -1,8 +1,6 @@
-#!/usr/bin/env python
-#coding:utf-8
-# Author:  Erkan OZgur Yilmaz
-# Purpose: 
-# Created: 11/21/2010
+# -*- coding: utf-8 -*-
+
+
 
 import sys
 import platform
@@ -10,13 +8,11 @@ import os
 import shutil
 import re
 import oyAuxiliaryFunctions as oyAux
+
 from xml.dom import minidom
+
 from oyProjectManager.utils import cache
 from oyProjectManager.models import user, abstractClasses
-
-
-
-__version__ = "11.3.15"
 
 
 
@@ -24,9 +20,30 @@ __version__ = "11.3.15"
 
 
 ########################################################################
-class Repository( abstractClasses.Singleton ):
+class Repository(abstractClasses.Singleton):
     """Repository class gives informations about the servers, projects, users
     etc.
+    
+    The Repository class helps:
+    
+     * Get a list of projects in the current repository
+    
+     * Parse several settings like:
+       
+        * environmentSettings.xml
+        
+        * repositorySettings.xml
+        
+        * users.xml
+    
+     * Get the last logged in user
+    
+     * Find server paths
+    
+     * and some auxiliary things like:
+    
+        * convert the given path to repository relative path which contains
+          the environment variable key in the repository path.
     
     =============
     Settings File
@@ -55,118 +72,10 @@ class Repository( abstractClasses.Singleton ):
     
     These are the xml files that the oyProjectManager searches for:
     
-     * defaultProjectSettings.xml:
+     * defaultProjectSettings.xml: see
+       :class:`~oyProjectManager.models.project.DefaultSettingsParser` for
+       details.
        
-       This file explains the default project settings for oyProjectManager. It
-       is an XML file with these elements.
-      
-       * sequenceData:
-         
-         Attributes:
-           
-            * shotPrefix: default is "SH", it is the prefix to be added before
-              the shot number
-          
-            * shotPadding: default is 3, it is the number of padding going to
-              be applied to find the string representation of the shot number.
-              If the shot number is 5 and the shotPadding is set to 3 and the
-              shotPrefix is "SH" then the final shot name will be SH005
-           
-            * revPrefix: default is "r", it is the revision variable prefix
-            
-            * revPadding: default is 2, it is the revision number padding,
-              for revision 3 the default values will output a string of "r03"
-              for the revision string variable
-            
-            * verPrefix: default is "v", it is the version variable prefix
-            
-            * verPadding: default is 3, it is the version number padding and
-              for default values a file version of 14 will output a string of
-              "v014" for the version string variable
-             
-            * timeUnit: default is pal, it is the time unit for the project,
-              possible values are "pal, film, ntsc, game". This variable
-              follows the Maya's time unit format
-          
-         Children elements:
-           
-            * structure: it is the child of sequenceData. Structure element
-              holds the project structure information. Every project will be
-              created by using this project structure. There are two possible
-              child elements:
-            
-            * shotDependent: shows the shot dependent folders. A shot dependent
-              folder will contain shot folders. For example a folder called
-              ANIMATION could be defined under shotDependent folders, then
-              oyProjectManager will automatically place folders for every shot of
-              the project. So if the project has three shots with shot numbers
-              10, 14, 21 then the structure of the ANIMATION folder will be like:
-              
-                ANIMATION\
-                SH010\
-                SH014\
-                SH021\
-            
-            * shotIndependent: shows the shot independent folder, or the rest of
-              the project structure. So any other folder which doesn't have a
-              direct relation with shots can be placed here. For example you can
-              place folders for MODELS, RIGS, OUTGOING_FILES etc.
-            
-
-         
-       * assetTypes: This element contains information about asset types.
-         
-         attributes: None
-         
-         children:
-           
-            * type: this is an asset type
-              
-              attributes:
-                
-                 * name: the name of the type
-                
-                 * path: the project relative path for the asset files in this
-                   type
-                 
-                 * shotDependent: it is a boolean value that specifies if this
-                   asset type is shot dependent
-                 
-                 * environments: this attribute lists the environment names
-                   where this asset type is valid through. It should list the
-                   environment names in a comma separated value (CSV) format
-                 
-                 * playblastFolder: this is the attribute that shows the
-                   default playblast/flipbook path for this kind of assets
-                
-                 * output_path: shows the output folder of one the asset type.
-                   For example you can set the render output folder by setting
-                   the output folder of the RENDER asset type to a spesific
-                   folder relative to the project root.
-        
-       * shotData: This is the element that shows the current projects shot
-         information
-         
-         children:
-           
-            * shot: the shot it self
-              
-              attributes:
-                
-                 * name: this is the name of the shot, it just shows the
-                   number and alternate letter part of the shot name, so for a
-                   shot named "SH001A" the name attribute is "1A"
-                
-                 * start: this is the global start frame of the shot
-                
-                 * end: this is the global end frame of the shot
-              
-              children:
-                
-                 * description: this is the text element that has the
-                   description of the current shot. You can place any amount of
-                   text inside this text element.
-    
      * environmentSettings.xml:
        
        Shows the general environment settings. An environment in
@@ -175,8 +84,8 @@ class Repository( abstractClasses.Singleton ):
        
        Structure of the XML file:
        
-          * environments: this node holds the environment objects and doesn't have
-            any attribute
+          * environments: this node holds the environment objects and doesn't
+            have any attribute
             
             children:
             
@@ -188,11 +97,12 @@ class Repository( abstractClasses.Singleton ):
                       case
                    
                     * extensions: the list of native file format extensions for
-                      the environment. For example, for Maya it should be "ma,mb",
-                      for Nuke it should be "nk", for Houdini it should be "hip"
-                      etc.
+                      the environment. For example, for Maya it should be
+                      "ma,mb", for Nuke it should be "nk", for Houdini it
+                      should be "hip" etc.
     
-     * repositorySettings.xml: holds the fileserver and general unit information
+     * repositorySettings.xml: holds the fileserver and general unit
+       information
        
        structure:
        
@@ -210,7 +120,8 @@ class Repository( abstractClasses.Singleton ):
                    
                     * serverPath: the path of the project folder in this server
                    
-                    * projectFoldersName: the project folder name in this server
+                    * projectFoldersName: the project folder name in this
+                      server
             
           * units: holds the default units for the system
             
@@ -335,12 +246,6 @@ class Repository( abstractClasses.Singleton ):
             self._lastUserFilePath, self._lastUserFileName
         )
         
-        #self._localSettingsFileName = '.localSettings.xml'
-        #self._localSettingsPath = self.getHomePath()
-        #self._localSettingsFullPath = os.path(
-        #    self._localSettingsPath, self._localSettingsFileName
-        #)
-        
         # ---------------------------------------------------
         # Users Settings File
         # ---------------------------------------------------
@@ -362,21 +267,18 @@ class Repository( abstractClasses.Singleton ):
         # the rest will be added when they are first needed
         # 
         self._timeUnits = {}
-        #self._linearUnits = {}
-        #self._angularUnits = {}
         
         # ---------------------------------------------------
-        
-        #self._LocalSettings()
         self._readSettings()
         self._readUsers()
-        #self._updatePathVariables()
     
     
     
     #----------------------------------------------------------------------
     def _readSettings(self):
-        """reads the repository settings from the xml file at the project root
+        """Reads the repository settings from the xml file at the project root.
+        
+        
         """
         
         # open the repository settings file
@@ -403,11 +305,6 @@ class Repository( abstractClasses.Singleton ):
         # -----------------------------------------------------
         # read the server settings
         # for now just assume one server
-        
-        #self._projectsFolderName = serverNodes[0].getAttribute(
-            #'projectsFolderName'
-        #)
-        #self.serverPath = serverNodes[0].getAttribute('serverPath')
         
         try:
             self.windows_path = serverNodes[0].getAttribute('windows_path')
@@ -724,7 +621,7 @@ class Repository( abstractClasses.Singleton ):
         """creates a new project on the server with the given project name
         """
         from oyProjectManager.models import project
-        return project.Project( projectName )
+        return project.Project(projectName)
     
     
     
@@ -806,7 +703,18 @@ class Repository( abstractClasses.Singleton ):
     
     #----------------------------------------------------------------------
     def getProjectAndSequenceNameFromFilePath(self, filePath):
-        """Returns the project name and sequence name from the path or fullPath
+        """Returns the project name and sequence name from the path or fullPath.
+        
+        Calculates the project and sequence names from the given file or folder
+        full path. Returns a tuple containing the project and sequence names.
+        In case no suitable project or sequence can be retrieved it returns
+        (None, None).
+        
+        :param str filePath: The file or folder path.
+        
+        :returns: Returns a tuple containing the project and sequence names.
+        
+        :rtype: (str, str)
         """
         
         #assert(isinstance(filePath, (str, unicode)))

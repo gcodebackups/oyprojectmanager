@@ -1,17 +1,9 @@
-#!/usr/bin/env python
-#coding:utf-8
-# Author:  Erkan Ozgur Yilmaz
-# Purpose: Testing the Repository
-# Created: 11/21/2010
-
-import sys
-import unittest
+# -*- coding: utf-8 -*-
 
 
 
-if __name__=='__main__':
-    unittest.main()
 import os
+import sys
 import shutil
 import tempfile
 import mocker
@@ -236,6 +228,46 @@ class RepositoryTesterWithEnv(mocker.MockerTestCase):
         # delete the temp folder
         shutil.rmtree(self.temp_settings_folder)
         shutil.rmtree(self.temp_project_folder)
+
+
+
+
+
+
+########################################################################
+class RepositoryTester(mocker.MockerTestCase):
+    """The main test case for the Repository class.
+    """
     
     
     
+    #----------------------------------------------------------------------
+    @classmethod
+    def setUpClass(cls):
+        """set up the test in class level
+        """
+        
+        # setup environment variable for default settings
+        
+        import os, sys
+        import oyProjectManager
+        
+        oyProjectManager_path = os.path.sep.join(
+            oyProjectManager.__file__.split(os.path.sep)[:-2]
+        )
+        
+        test_settings_path = os.path.join(oyProjectManager_path,
+                                          "tests/test_settings")
+        
+        # append or update the environment key to point the test_settings path
+        os.environ["OYPROJECTMANAGER_SETTINGS_PATH"] = test_settings_path
+    
+    
+    
+    #----------------------------------------------------------------------
+    def test_init(self):
+        """testing initializing the class
+        """
+        
+        
+        

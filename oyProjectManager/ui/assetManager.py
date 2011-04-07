@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+
+
+
 import os, sys
 import oyAuxiliaryFunctions as oyAux
 from PyQt4 import QtGui, QtCore
@@ -7,10 +11,6 @@ import oyProjectManager
 from oyProjectManager.models import asset, project, repository
 from oyProjectManager.models.environments import environmentFactory
 from oyProjectManager.ui import assetUpdater, singletonQApplication
-
-
-
-__version__ = "10.6.22"
 
 
 

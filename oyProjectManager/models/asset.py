@@ -1,9 +1,12 @@
+# -*- coding: utf-8 -*-
+
+
+
 import os, re, time
 import oyAuxiliaryFunctions as oyAux
 
 
 
-__version__ = "10.6.22"
 
 
 

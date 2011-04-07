@@ -1,12 +1,17 @@
+# -*- coding: utf-8 -*-
+
+
+
 from PyQt4 import uic, QtCore, QtGui
 
-version = '10.6.3'
 
 global uicFile
 global pyFile
 
+
 uicFilePaths = []
 pyFilePaths = []
+
 
 #uicFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectManager/ui/assetManager.ui' )
 #pyFilePaths.append( '/home/ozgur/maya/scripts/oy-maya-scripts/oyTools/oyProjectManager/ui/assetManager_UI.py' )

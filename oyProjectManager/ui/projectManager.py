@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+
+
+
 import os, sys, re
 import oyAuxiliaryFunctions as oyAux
 from PyQt4 import QtGui, QtCore
@@ -9,7 +13,7 @@ from oyProjectManager.utils import rangeTools
 from oyProjectManager.ui import singletonQApplication
 
 
-__version__ = "10.5.17"
+
 
 
 

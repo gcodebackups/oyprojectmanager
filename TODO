@@ -1,6 +1,10 @@
 TODO
 ====
 
+ * Instead of having something like a "default files" concept, allow all
+   environment to have their own initialization part, and call them whenever
+   a project is created.
+
  * Create test for all the classes used, and turn the development practice to
    TDD as soon as possible.
 

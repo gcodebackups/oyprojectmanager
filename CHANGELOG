@@ -1,6 +1,13 @@
 Version History
 ===============
 
+v11.4.7
+-------
+
+ * :class:`~oyProjectManager.models.abstractClasses.Environment` now raises
+   notImplemented errors for the methods which are not implemented by the child
+   class.
+
 v11.4.5
 -------
 

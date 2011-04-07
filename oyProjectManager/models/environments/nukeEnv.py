@@ -1,11 +1,11 @@
+# -*- coding: utf-8 -*-
+
+
+
 import os
 import nuke
 import oyAuxiliaryFunctions as oyAux
 from oyProjectManager.models import asset, project, abstractClasses, repository
-
-
-
-__version__ = "10.4.29"
 
 
 

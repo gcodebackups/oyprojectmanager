@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+
+
+
 import os
 from pymel import versions
 from pymel import core as pm
@@ -5,9 +9,6 @@ import maya.cmds as mc
 import oyAuxiliaryFunctions as oyAux
 from oyProjectManager.models import asset, project, repository, abstractClasses
 from oyProjectManager import utils
-
-
-__version__ = "11.3.24"
 
 
 

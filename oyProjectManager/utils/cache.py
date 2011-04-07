@@ -1,8 +1,8 @@
+# -*- coding: utf-8 -*-
+
+
+
 import time
-
-
-
-__version__ = "10.2.2"
 
 
 

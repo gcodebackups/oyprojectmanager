@@ -1,10 +1,10 @@
+# -*- coding: utf-8 -*-
+
+
+
 import os
 from xml.dom import minidom
 from oyProjectManager.models import abstractClasses, repository
-
-
-
-__version__ = "10.3.17"
 
 
 

@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 houdiniEnv.py by Erkan Ozgur Yilmaz (c) 2009-2010
 
@@ -6,7 +7,6 @@ Description:
 the houdini environment part of the asset management system...
 
 has commands to save, open and import houdini files
-
 """
 
 
@@ -16,10 +16,6 @@ import hou
 import re
 from oyProjectManager.models import asset, project, repository, abstractClasses
 import oyAuxiliaryFunctions as oyAux
-
-
-
-__version__ = "10.8.27"
 
 
 

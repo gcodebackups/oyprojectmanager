@@ -1,3 +1,7 @@
+# -*- coding: utf-8 -*-
+
+
+
 import os, sys
 from PyQt4 import QtGui, QtCore
 import shotEditor_UI
@@ -9,7 +13,6 @@ from oyProjectManager.models.environments import environmentFactory
 
 
 
-__version__ = "10.5.17"
 
 
 

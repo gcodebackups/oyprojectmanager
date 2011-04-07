@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 photoshopEnv by Erkan Ozgur Yilmaz (c) 2009-2010
 
@@ -13,7 +14,6 @@ tested)
 it also needs the comtypes to be installed to the current python environment
 
 http://sourceforge.net/projects/comtypes/
-
 """
 
 
@@ -21,11 +21,6 @@ http://sourceforge.net/projects/comtypes/
 from comtypes import client
 import oyAuxiliaryFunctions as oyAux
 from oyProjectManager.models import asset, project, repository, abstractClasses
-
-
-
-__version__ = "10.3.17"
-
 
 
 

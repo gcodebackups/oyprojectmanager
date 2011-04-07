@@ -1,12 +1,12 @@
+# -*- coding: utf-8 -*-
+
+
+
 import sys, os, re, shutil, glob
 from xml.dom import minidom
 import oyAuxiliaryFunctions as oyAux
 from oyProjectManager.utils import cache, rangeTools
 from oyProjectManager.models import asset, user, repository
-
-
-
-__version__ = "10.6.23"
 
 
 

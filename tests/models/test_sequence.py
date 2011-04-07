@@ -1,10 +1,12 @@
-#coding:utf-8
+# -*- coding: utf-8 -*-
+
 
 
 import os, sys, shutil
 import unittest
 from xml.dom import minidom
 from oyProjectManager.models import project, repository, asset
+
 
 
 
