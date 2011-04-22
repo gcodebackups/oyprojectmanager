@@ -7,7 +7,7 @@ import sys
 import shutil
 import tempfile
 from xml.dom import minidom
-import mocker
+import unittest
 
 from oyProjectManager.models import repository, project
 
@@ -17,7 +17,7 @@ from oyProjectManager.models import repository, project
 
 
 ########################################################################
-class RepositoryTester(mocker.MockerTestCase):
+class RepositoryTester(unittest.TestCase):
     """tests the repository with environment variables
     """
     
@@ -35,8 +35,8 @@ class RepositoryTester(mocker.MockerTestCase):
         self.temp_settings_folder = tempfile.mktemp()
         self.temp_projects_folder = tempfile.mkdtemp()
         
-        os.environ['OYPROJECTMANAGER_PATH'] = self.temp_settings_folder
-        
+        os.environ["OYPROJECTMANAGER_PATH"] = self.temp_settings_folder
+        os.environ["STALKER_REPOSITORY_PATH"] = self.temp_projects_folder
         
         # copy the default files to the folder
         self.package_path = os.path.abspath(
@@ -49,25 +49,6 @@ class RepositoryTester(mocker.MockerTestCase):
         
         self.default_settings_dir_path = os.path.join(
             self.package_path, "oyProjectManager", "settings" )
-        
-        ## copy the setting files
-        #files = ["defaultProjectSettings.xml",
-                 #"environmentSettings.xml",
-                 #"repositorySettings.xml",
-                 #"users.xml",
-                 #"_defaultFiles_",
-                 #]
-        
-        #for file_ in files:
-            #shutil.copy2(
-                #os.path.join(
-                    #self.default_settings_dir_path,
-                    #file_)
-                #,
-                #os.path.join(
-                    #self.temp_settings_folder,
-                    #file_)
-                #)
         
         shutil.copytree(
             self.default_settings_dir_path,
@@ -104,23 +85,18 @@ class RepositoryTester(mocker.MockerTestCase):
     
     
     
-    ##----------------------------------------------------------------------
-    #def test_get_settings_path_with_environment_variable(self):
-        #"""testing if the get_settings_path returns the correct path when the
-        #environment variables is set
-        #"""
-        
-        #repo = repository.Repository()
-        
-        ## this should return the same path with the environment
-        #self.assertEqual(repo.get_settings_path(), self.temp_settings_folder)
-    
-    
-    
     #----------------------------------------------------------------------
     def test_create_project(self):
         """testing project creation
         """
+        
+        repo = repository.Repository()
+        
+        print type(repo)
+        print repo
+        print repository
+        print repository.Repository
+        print type(repository.Repository)
         
         repo = repository.Repository()
         
@@ -184,7 +160,7 @@ class RepositoryTester(mocker.MockerTestCase):
         # now test if the path is expanded
         repo = repository.Repository()
         
-        self.assertEquals(repo.settings_dir_path, expanded_new_path)
+        self.assertEqual(repo.settings_dir_path, expanded_new_path)
         
         # now delete the tmp folder
         shutil.rmtree(expanded_new_path)
@@ -199,7 +175,7 @@ class RepositoryTester(mocker.MockerTestCase):
         
         repo = repository.Repository()
         
-        self.assertEquals(repo._default_settings_file_full_path,
+        self.assertEqual(repo._default_settings_file_full_path,
                           repo.default_settings_file_full_path)
     
     
@@ -234,7 +210,7 @@ class RepositoryTester(mocker.MockerTestCase):
         asset_path = os.path.join(repo.server_path, project_name,
                                   sequence_name, "Asset1")
         
-        self.assertEquals(
+        self.assertEqual(
             repo.get_project_and_sequence_name_from_file_path(asset_path),
             (project_name, sequence_name)
         )
@@ -249,7 +225,7 @@ class RepositoryTester(mocker.MockerTestCase):
         
         repo = repository.Repository()
         
-        self.assertEquals(
+        self.assertEqual(
             repo.get_project_and_sequence_name_from_file_path(
                 "/an/irrelative/path/to/some/asset/or/something/else"),
             (None, None)
@@ -264,7 +240,7 @@ class RepositoryTester(mocker.MockerTestCase):
         
         repo = repository.Repository()
         
-        self.assertEquals(repo.home_path, os.environ["HOME"])
+        self.assertEqual(repo.home_path, os.environ["HOME"])
     
     
     
@@ -302,7 +278,7 @@ class RepositoryTester(mocker.MockerTestCase):
             last_user = repo.last_user
         
         # now check it if it is same with the last_user_file
-        self.assertEquals(
+        self.assertEqual(
             last_user,
             open(repo._last_user_file_full_path).readline().strip()
         )
@@ -324,7 +300,7 @@ class RepositoryTester(mocker.MockerTestCase):
         repo.last_user = new_last_user
         
         # check if it is set properly
-        self.assertEquals(
+        self.assertEqual(
             repo.last_user,
             new_last_user
         )
@@ -360,7 +336,7 @@ class RepositoryTester(mocker.MockerTestCase):
         
         repo.server_path = new_server_path
         
-        self.assertEquals(repo.server_path, expanded_new_server_path)
+        self.assertEqual(repo.server_path, expanded_new_server_path)
         
         # clean up test
         shutil.rmtree(expanded_new_server_path)
@@ -376,7 +352,7 @@ class RepositoryTester(mocker.MockerTestCase):
         
         repo = repository.Repository()
         
-        self.assertEquals(repo.server_path, repo.linux_path)
+        self.assertEqual(repo.server_path, repo.linux_path)
     
     
     
@@ -393,19 +369,19 @@ class RepositoryTester(mocker.MockerTestCase):
         repo.server_path = new_server_path
         
         # check if it is same with the server_path
-        self.assertEquals(
+        self.assertEqual(
             new_server_path,
             repo.server_path
         )
         
         # check if it is same with the linux path
-        self.assertEquals(
+        self.assertEqual(
             new_server_path,
             repo.linux_path
         )
         
         # now check if it is same with the linux path
-        self.assertEquals(
+        self.assertEqual(
             repo.server_path,
             repo.linux_path
         )
@@ -429,7 +405,7 @@ class RepositoryTester(mocker.MockerTestCase):
         
         repo.linux_path = new_server_path
         
-        self.assertEquals(repo.server_path, new_server_path)
+        self.assertEqual(repo.server_path, new_server_path)
         
         # clean up
         os.rmdir(new_server_path)
@@ -452,7 +428,7 @@ class RepositoryTester(mocker.MockerTestCase):
         
         repo = repository.Repository()
         
-        self.assertEquals(repo.settings_dir_path, settings_dir_path_from_env)
+        self.assertEqual(repo.settings_dir_path, settings_dir_path_from_env)
     
     
     
@@ -478,7 +454,7 @@ class RepositoryTester(mocker.MockerTestCase):
         # now get the projects list and check
         # if it is same with the original projects list
         
-        self.assertEquals(repo.projects, project_names)
+        self.assertEqual(repo.projects, project_names)
     
     
     
@@ -513,7 +489,7 @@ class RepositoryTester(mocker.MockerTestCase):
         # now get the projects list and check
         # if it is same with the original projects list
         
-        self.assertEquals(repo.projects, expected_list)
+        self.assertEqual(repo.projects, expected_list)
     
     
     
@@ -536,7 +512,7 @@ class RepositoryTester(mocker.MockerTestCase):
             test_folder_name
         )
         
-        self.assertEquals(
+        self.assertEqual(
             repo.relative_path(test_folder_full_path),
             expected_path
         )
@@ -577,7 +553,68 @@ class RepositoryTester(mocker.MockerTestCase):
             )
         
         # now check if we only get the valid projects
-        self.assertEquals(
+        self.assertEqual(
             project_names,
             repo.valid_projects
         )
+    
+    
+    
+    #----------------------------------------------------------------------
+    def test_repository_path_environment_variable_init_1(self):
+        """testing if the repository path environment variable is initialized
+        where there is no repository path key in the environment variables
+        """
+        
+        # remove the environment variable if it exists
+        key = "STALKER_REPOSITORY_PATH"
+        value = ""
+        
+        has_key = os.environ.has_key(key)
+        
+        if has_key:
+            value = os.environ[key]
+            
+            # remove the key
+            os.environ.pop(key)
+        
+        # create another repo and check if it is going to create the key
+        repo = repository.Repository()
+        self.assertTrue(os.environ.has_key(key))
+        
+        # restore the value
+        if has_key:
+            os.environ[key] = value
+    
+    
+    
+    #----------------------------------------------------------------------
+    def test_repository_path_environment_variable_init_2(self):
+        """testing if the repository path environment variable is initialized
+        correctly even there is a key in the environment with the same
+        """
+        
+        # check if there is a key in the environment and create one if there
+        # isn't any
+        
+        key = "STALKER_REPOSITORY_PATH"
+        value = "/TEST_VALUE"
+        
+        if os.environ.has_key(key):
+            # get the value
+            value = os.environ[key]
+        else:
+            # set the value
+            os.environ[key] = value
+        
+        # now create a Repository and check if it is going to get the value
+        # for the repository_path
+        
+        repo = repository.Repository()
+        
+        # the value should be still there intact
+        self.assertEqual(os.environ[key], value)
+    
+    
+    
+    

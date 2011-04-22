@@ -27,6 +27,8 @@ class HoudiniEnvironment(abstractClasses.Environment):
     """the houdini environment class
     """
     
+    
+    
     #----------------------------------------------------------------------
     def save(self):
         """the save action for houdini environment
@@ -47,8 +49,9 @@ class HoudiniEnvironment(abstractClasses.Environment):
         # set the render file name
         self.setRenderFileName()
         
-        # houdini accepts only strings as file name, no unicode support as I see
-        hou.hipFile.save( file_name = str(fullPath) )
+        # houdini accepts only strings as file name, no unicode support as I
+        # see
+        hou.hipFile.save(file_name=str(fullPath))
         
         # set the environment variables
         self.setEnvironmentVariables()
@@ -68,7 +71,7 @@ class HoudiniEnvironment(abstractClasses.Environment):
         fullPath = self._asset.fullPath
         fullPath = fullPath.replace('\\','/')
         
-        hou.hipFile.load( file_name = str(fullPath) , suppress_save_prompt=True )
+        hou.hipFile.load(file_name=str(fullPath), suppress_save_prompt=True)
         
         # set the environment variables
         self.setEnvironmentVariables()
@@ -268,7 +271,7 @@ class HoudiniEnvironment(abstractClasses.Environment):
         """sets the render file name
         """
         # M:/JOBs/PRENSESIN_UYKUSU/SC_008/_RENDERED_IMAGES_/_SHOTS_/SH008/MasalKusu/`$OS`/SH008_MasalKusu_`$OS`_v006_oy.$F4.exr
-        
+        # $STALKER_REPOSITORY_PATH/PRENSESIN_UYKUSU/SC_008/_RENDERED_IMAGES_/_SHOTS_/SH008/MasalKusu/`$OS`/SH008_MasalKusu_`$OS`_v006_oy.$F4.exr
         seq = self._asset.sequence
         renderOutputFolder = seq.fullPath + '/' + self._asset.type.output_path # _RENDERED_IMAGES_/SHOTS
         assetBaseName = self._asset.baseName
@@ -282,6 +285,10 @@ class HoudiniEnvironment(abstractClasses.Environment):
                        userInitials + ".$F4.exr"
         outputFileName = outputFileName.replace('\\','/')
         
+        # replace the repository path environment key
+        repo = repository.Repository()
+        outputFileName = repo.relative_path(outputFileName)
+        
         outputNodes = self.getOutputNodes()
         for outputNode in outputNodes:
             # get only the ifd nodes for now
@@ -290,9 +297,11 @@ class HoudiniEnvironment(abstractClasses.Environment):
                 outputNode.setParms({'vm_picture': str(outputFileName)})
                 
                 # also create the folders
-                outputFileFullPath = outputNode.evalParm( 'vm_picture' )
-                outputFilePath = os.path.dirname( outputFileFullPath )
-                oyAux.createFolder( outputFilePath )
+                outputFileFullPath = outputNode.evalParm('vm_picture')
+                outputFilePath = os.path.dirname(outputFileFullPath)
+                oyAux.createFolder(
+                    os.path.expandvars(outputFilePath)
+                )
     
     
     
@@ -315,6 +324,18 @@ class HoudiniEnvironment(abstractClasses.Environment):
         hou.setFps( timeUnitFps )
         
         self.setFrameRange( startFrame, endFrame)
+    
+    
+    
+    #----------------------------------------------------------------------
+    def replace_paths(self):
+        """replaces all the paths in all the path related nodes
+        """
+        
+        # get all the nodes and their childs and
+        # try to get string and file path parameters
+        # and replace them if they contain absolute paths
+        pass
 
 
 

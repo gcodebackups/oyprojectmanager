@@ -20,7 +20,8 @@ from oyProjectManager.models import user, abstractClasses
 
 
 ########################################################################
-class Repository(abstractClasses.Singleton):
+#class Repository(abstractClasses.Singleton):
+class Repository(object):
     """Repository class gives informations about the servers, projects, users
     etc.
     
@@ -304,8 +305,6 @@ class Repository(abstractClasses.Singleton):
     def _init_repository_path_environment_variable(self):
         """initializes the environment variables
         """
-        
-        #print "initializing repository path env variable"
         
         # create the environment variable if there is no defined yet
         if not os.environ.has_key(self.repository_path_env_key):
@@ -659,6 +658,7 @@ class Repository(abstractClasses.Singleton):
     def default_settings_file_full_path(self):
         """returns the default settings file full path
         """
+        
         return self._default_settings_file_full_path
     
     

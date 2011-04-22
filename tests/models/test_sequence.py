@@ -25,7 +25,7 @@ class SequenceTester(unittest.TestCase):
         """set up the test in class level
         """
         
-        # setup environment variable for default settings
+        # setup endvironment variable for default settings
         
         import os, sys
         import oyProjectManager
@@ -39,6 +39,21 @@ class SequenceTester(unittest.TestCase):
         
         # append or update the environment key to point the test_settings path
         os.environ["OYPROJECTMANAGER_PATH"] = test_settings_path
+        
+        # create the test folder
+        os.makedirs("/tmp/JOBs")
+    
+    
+    
+    #----------------------------------------------------------------------
+    @classmethod
+    def tearDownClass(cls):
+        """cleanup test
+        """
+        
+        # remove the temp project path
+        shutil.rmtree("/tmp/JOBs")
+        
     
     
     
@@ -73,7 +88,7 @@ class SequenceTester(unittest.TestCase):
         repo = repository.Repository()
         
         # BUG: works only under linux fix it later
-        self.assertEquals(repo.server_path, "/tmp/JOBs")
+        self.assertEqual(repo.server_path, "/tmp/JOBs")
     
     
     
@@ -100,7 +115,7 @@ class SequenceTester(unittest.TestCase):
         
         output_folders = document.getElementsByTagName("output_folders")
         
-        self.assertEquals(output_folders, [])
+        self.assertEqual(output_folders, [])
     
     
     
@@ -175,7 +190,7 @@ class SequenceTester(unittest.TestCase):
         # by using the dom check if the settings is converted to the new format
         settings = minidom.parse(settingsFileFullPath)
         
-        self.assertEquals(settings.getElementsByTagName("outputFolders"), [])
+        self.assertEqual(settings.getElementsByTagName("outputFolders"), [])
 
 
 
