@@ -270,6 +270,10 @@ class NukeEnvironment(abstractClasses.Environment):
                            self._asset.versionString + "_" + \
                            self._asset.userInitials + ".###.tga"
         
+        # check if it is a stereo comp
+        # if it is enable seperate view rendering
+        
+        
         output_file_full_path = os.path.join(
             seq.fullPath,
             self._asset.type.output_path,

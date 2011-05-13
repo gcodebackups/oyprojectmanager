@@ -3,9 +3,7 @@ houdiniEnv.py by Erkan Ozgur Yilmaz (c) 2009-2010
 
 Description:
 ------------
-the houdini environment part of the asset management system...
-
-has commands to save, open and import houdini files
+The houdini part of the asset management system...
 """
 
 
@@ -193,7 +191,7 @@ class HoudiniEnvironment(abstractClasses.Environment):
         # use the hscript commands to get the frame range
         timeInfo = hou.hscript('tset')[0].split('\n')
         
-        pattern = r'[0-9\.]+'
+        pattern = r'[-0-9\.]+'
         
         startFrame = int( hou.timeToFrame( float( re.search( pattern, timeInfo[2] ).group(0) ) ) )
         duration = int( re.search( pattern, timeInfo[0] ).group(0) )

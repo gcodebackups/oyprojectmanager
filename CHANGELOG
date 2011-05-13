@@ -36,6 +36,13 @@ v0.1.0
    :method:`~oyProjectManager.models.repository.Repository.server_path`
    instead.
 
+ * fixed houdiniEnv for negative frame ranges, previously it was giving wrong
+   frame range info.
+
+ * added a leading "/" to the texture path in mentalray texture files when
+   replacing the external paths with the repository path environment
+   variable.
+
 v11.4.9
 -------
 

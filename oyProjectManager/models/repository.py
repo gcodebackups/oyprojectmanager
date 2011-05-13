@@ -489,8 +489,9 @@ class Repository(object):
             
             for folder in child_folders:
                 filtered_folder_name = re.sub(
-                    r".*?([^A-Z_]+)([A-Z0-9_]+)",
-                    r"\2", folder
+                    r".*?(^[^A-Z_]+)([A-Z0-9_]+)",
+                    r"\2",
+                    folder
                 )
                 #print filtered_folder_name, folder
                 if filtered_folder_name == folder:

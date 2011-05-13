@@ -49,7 +49,7 @@ class MayaEnvironment(abstractClasses.Environment):
         pm.delete(unknownNodes)
         
         # set the file paths for external resources
-        self.replace_external_paths()
+        #self.replace_external_paths()
         
         # save the file
         pm.saveAs(self._asset.fullPath, type='mayaAscii')
@@ -104,7 +104,7 @@ class MayaEnvironment(abstractClasses.Environment):
         self.appendToRecentFiles(assetFullPath)
         
         # replace_external_paths
-        self.replace_external_paths()
+        #self.replace_external_paths()
         
         # check the referenced assets for newer version
         toUpdateList = self.checkReferenceVersions()
@@ -764,16 +764,16 @@ class MayaEnvironment(abstractClasses.Environment):
             if ref.path.replace("\\", "/").startswith(repo.server_path.replace("\\", "/")):
                 print "replacing reference:", ref.path
                 print "replacing with:", repo_env_key
-
+                
                 new_ref_path = ref.path.replace(
                     repo.server_path.replace("\\", "/"),
                     repo_env_key
                 )
-               
+                
                 print new_ref_path
-
+                
                 ref.replaceWith(new_ref_path)
-
+            
         # texture files
         for image_file in pm.ls(type="file"):
             file_texture_path = image_file.getAttr("fileTextureName")
@@ -791,6 +791,6 @@ class MayaEnvironment(abstractClasses.Environment):
                 if mr_texture_path.startswith(repo.server_path):
                     mr_texture.setAttr(
                         "fileTextureName",
-                        mr_texture_path.replace(repo.server_path, repo_env_key)
+                        "/" + mr_texture_path.replace(repo.server_path, repo_env_key)
                     )
         
