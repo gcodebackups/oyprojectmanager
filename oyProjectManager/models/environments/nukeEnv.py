@@ -266,10 +266,6 @@ class NukeEnvironment(abstractClasses.Environment):
         seq = self._asset.sequence
         assert(isinstance(seq, project.Sequence))
         
-        aType = self._asset.type
-        assert(isinstance(aType, asset.AssetType))
-        
-        
         output_file_name = self._asset.baseName + "_" + \
                            self._asset.subName + "_" + \
                            "OUTPUT_" + \
@@ -283,7 +279,7 @@ class NukeEnvironment(abstractClasses.Environment):
         
         output_file_full_path = os.path.join(
             seq.fullPath,
-            self._asset.type.output_path,
+            self._asset.output_path,
             self._asset.baseName,
             output_file_name
         )

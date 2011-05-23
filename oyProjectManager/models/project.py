@@ -127,10 +127,6 @@ class DefaultSettingsParser(object):
                            should list the environment names in a comma
                            separated value (CSV) format
                         
-                         * playblastFolder: this is the attribute that shows
-                           the default playblast/flipbook path for this kind of
-                           assets
-                        
                          * output_path: shows the output folder of this asset
                            type. For example you can set the render output
                            folder by setting the output folder of the RENDER
@@ -207,9 +203,31 @@ class Project(object):
     to finish the creation process, which in fact is only a folder.
     
     A Project can not be created without a name or with a name which is None. A
-    Project can not be created with an invalid name. So lets say a project with
-    name "'^+'^" can not be craeated cause the name will become an empty string
-    after name validation.
+    Project can not be created with an invalid name. For example, a project
+    with name "'^+'^" can not be craeated because the name will become an empty
+    string after the name validation process.
+    
+    
+    .. versionadded:: 0.1.2
+       Project Settings
+       
+    Projects have a file called ".settings.xml" in their root. This settings
+    file holds information about:
+    
+       * The placement of the asset files.
+    
+       * The placement of the shot files.
+    
+       * The general folder structure of the project.
+    
+       * etc.
+    
+    Every project has its own settings file to hold the different and evolving
+    directory structure of the projects.
+    
+    Even though it is not recommended the file can be edited by a text editor
+    to change the project settings. But care must be taken while doing so.
+    
     
     
     """
@@ -708,19 +726,17 @@ class Sequence(object):
             
             name = node.getAttribute('name')
             path = node.getAttribute('path')
-            shotDependency = bool( int( node.getAttribute('shotDependent') ) )
-            playblastFolder = node.getAttribute('playblastFolder')
+            shotDependency = bool(int(node.getAttribute('shotDependent')))
             environments = node.getAttribute('environments').split(",")
             output_path = node.getAttribute("output_path")
             
-            ## fix path issues for windows
+            # fix path issues for windows
             if os.name == 'nt':
                 path = oyAux.fixWindowsPath(path)
-                playblastFolder = oyAux.fixWindowsPath(playblastFolder)
             
             self._assetTypes.append(
-                asset.AssetType(name, path, shotDependency, playblastFolder,
-                                environments, output_path)
+                asset.AssetType(name, path, shotDependency, environments,
+                                output_path)
             )
     
     
@@ -895,13 +911,10 @@ class Sequence(object):
             typeNode = minidom.Element('type')
             typeNode.setAttribute("name", aType.name )
             typeNode.setAttribute("path", aType.path.replace("\\","/"))
-
+            
             typeNode.setAttribute("shotDependent",
                                   unicode(int(aType.isShotDependent)))
-
-            typeNode.setAttribute("playblastFolder",
-                                  aType.playblastFolder.replace("\\", "/"))
-
+            
             typeNode.setAttribute("environments", ",".join(aType.environments))
             typeNode.setAttribute("output_path",
                                   aType.output_path.replace("\\", "/"))
@@ -1918,7 +1931,8 @@ class Sequence(object):
     
     
     #----------------------------------------------------------------------
-    def addNewAssetType(self, name='', path='', shotDependent=False, playblastFolder='', environments=None, output_path=""):
+    def addNewAssetType(self, name='', path='', shotDependent=False,
+                        environments=None, output_path=""):
         """adds a new asset type to the sequence
         
         you need to invoke self.saveSettings to make the changes permenant
@@ -1929,16 +1943,15 @@ class Sequence(object):
         # check if there is allready an assetType with the same name
         
         # get the names of the asset types and convert them to upper case
-        assetTypeName = [ assetType.name.upper() for assetType in self._assetTypes ]
+        assetTypeName = [assetType.name.upper()
+                         for assetType in self._assetTypes]
         
         if name.upper() not in assetTypeName:
             # create the assetType object with the input
-            newAType = asset.AssetType( name, path, shotDependent, playblastFolder, environments )
+            newAType = asset.AssetType(name, path, shotDependent, environments)
             
             # add it to the list
-            self._assetTypes.append( newAType )
-        #else:
-            #print name, "is allready on the list, skipping"
+            self._assetTypes.append(newAType)
     
     
     

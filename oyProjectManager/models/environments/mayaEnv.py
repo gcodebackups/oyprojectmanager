@@ -237,7 +237,7 @@ class MayaEnvironment(abstractClasses.Environment):
         assert(isinstance(parentSeq, project.Sequence))
         
         parentSeqFullPath = parentSeq.fullPath.replace("\\", "/")
-        renderOutputFolder = self._asset.type.output_path # RENDERED_IMAGES
+        renderOutputFolder = self._asset.output_path # RENDERED_IMAGES
         
         # image folder from the workspace.mel
         imageFolderFromWS = pm.workspace.fileRules['image'] # RENDERED_IMAGES/
@@ -333,10 +333,7 @@ class MayaEnvironment(abstractClasses.Environment):
         """sets the playblast file name
         """
         
-        playblastFolderPath = self._asset.type.playblastFolder
-        
-        #if os.name == 'nt':
-            #playblastFolderPath = playblastFolderPath.replace('/','\\')
+        playblastFolderPath = self._asset.output_path
         
         assert(isinstance(self._asset, asset.Asset))
         
@@ -344,14 +341,16 @@ class MayaEnvironment(abstractClasses.Environment):
         
         baseName = self._asset.baseName
         
-        playblastPath = os.path.join( seqFullPath, playblastFolderPath, baseName )
-        playblastFullPath = os.path.join( playblastPath, self._asset.fileNameWithoutExtension )
+        playblastPath = os.path.join(seqFullPath, playblastFolderPath,
+                                     baseName)
+        
+        playblastFullPath = os.path.join(playblastPath,
+                                         self._asset.fileNameWithoutExtension)
         
         # create the folder
-        oyAux.createFolder( playblastPath )
+        utils.mkdir(playblastPath)
         
         playblastFullPath = playblastFullPath.replace('\\','/')
-        #print "playblastFullPath:",playblastFullPath
         
         pm.optionVar['playblastFile'] = playblastFullPath
     
@@ -487,14 +486,14 @@ class MayaEnvironment(abstractClasses.Environment):
             else:
                 projName, seqName = repo.get_project_and_sequence_name_from_file_path( fullPath )
                 
-                proj = project.Project( projName )
-                seq = project.Sequence( proj, seqName )
+                proj = project.Project(projName)
+                seq = project.Sequence(proj, seqName)
                 
-                tempAssetPath = os.path.basename( fullPath )
-                tempAsset = asset.Asset( proj, seq, tempAssetPath )
+                tempAssetPath = os.path.basename(fullPath)
+                tempAsset = asset.Asset(proj, seq, tempAssetPath)
                 
                 if tempAsset.isValidAsset:
-                    validAssets.append( (tempAsset, ref, fullPath) )
+                    validAssets.append((tempAsset, ref, fullPath))
                     
                     prevAsset = tempAsset
                     prevFullPath = fullPath

@@ -1071,11 +1071,10 @@ class AssetType(object):
     
     
     #----------------------------------------------------------------------
-    def __init__(self, name="", path="", shotDependent=False, playblastFolder="", environments=None, output_path=""):
+    def __init__(self, name="", path="", shotDependent=False, environments=None, output_path=""):
         self._name = name
         self._path = path
         self._shotDependency = shotDependent
-        self._playblastFolder = playblastFolder
         self._environments = environments
         self._output_path = output_path
     
@@ -1114,15 +1113,6 @@ class AssetType(object):
         return locals()
     
     path = property( **path() )
-    
-    
-    
-    #----------------------------------------------------------------------
-    @property
-    def playblastFolder(self):
-        """returns playblast folder of that asset type
-        """
-        return self._playblastFolder
     
     
     
