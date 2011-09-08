@@ -141,4 +141,23 @@ class AssetTester(unittest.TestCase):
             new_asset.output_path,
             "TEST/SH001/OUTPUT"
         )
+    
+    
+    
+    #----------------------------------------------------------------------
+    def test_no_rev_number(self):
+        """testing assets with sequences which has the no_rev_number set to
+        True
+        """
         
+        # create a project
+        # create a sequence
+        # set the sequences no_rev_number attribute to True
+        # create a new asset
+        # check if the asset file name will be correctly calculated
+        
+        pass
+    
+    
+    
+    
