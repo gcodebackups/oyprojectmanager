@@ -3,6 +3,7 @@
 
 
 import os
+import platform
 import nuke
 import oyAuxiliaryFunctions as oyAux
 from oyProjectManager.models import asset, project, abstractClasses, repository
@@ -301,8 +302,11 @@ class NukeEnvironment(abstractClasses.Environment):
             pass
         
         # set the default output file type to jpeg
+        platform_system = platform.system()
+        
         format_id = 7
-        if os.name != "nt":
+        if platform_system == "Darwin":
+            format_id = 6
             # check the nuke version for nuke 6.2 and below
             if (nuke.NUKE_VERSION_MAJOR + nuke.NUKE_VERSION_MINOR/10.0) < 6.3:
                 format_id = 8
