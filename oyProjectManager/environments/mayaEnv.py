@@ -430,7 +430,7 @@ class Maya(EnvironmentBase):
         # defaultRenderGlobals
         dRG = pm.PyNode('defaultRenderGlobals')
         dRG.setAttr('imageFilePrefix', render_file_rel_path)
-        dRG.setAttr('renderVersion', "%03d" % version.version_number )
+        dRG.setAttr('renderVersion', "v%03d" % version.version_number )
         dRG.setAttr('animation', 1)
         dRG.setAttr('outFormatControl', 0 )
         dRG.setAttr('extensionPadding', 3 )
