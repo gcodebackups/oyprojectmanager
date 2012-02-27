@@ -52,9 +52,29 @@ class ConfigTester(unittest.TestCase):
         # database_file_name variable
         from oyProjectManager import config
         conf = config.Config()
-
+        
         self.assertEqual(test_value, conf.database_url)
-
+    
+#    def test_config_variable_extended_by_user_config(self):
+#        """testing if the config variables are extended with user config values
+#        """
+#        
+#        config_file = open(self.config_full_path, "w")
+#        config_file.writelines(["#-*- coding: utf-8 -*-\n",
+#                                'resolution_presets = {\n',
+#                                '    "2k New Plate": [2048, 1024, 1.0]\n',
+#                                '}\n'])
+#        config_file.close()
+#        
+#        # now import the config and see the variable is extended with new
+#        # values but also has the previous values
+#        from oyProjectManager import config
+#        conf = config.Config()
+#        
+#        self.assertTrue(conf.resolution_presets.has_key("2k New Plate"))
+#        self.assertTrue(conf.resolution_presets.has_key("PAL"))
+        
+        
     def test_config_variable_doesnt_create_new_variables_with_user_config(self):
         """testing if the config will not be updated by the user config by
         adding new variables

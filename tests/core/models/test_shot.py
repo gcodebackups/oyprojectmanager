@@ -51,15 +51,18 @@ class ShotTester(unittest.TestCase):
         self._number_test_values = [
             (23, "23"),
             ("23", "23"),
-            ("324ASF", "324A"),
-            ("AD43", "43"),
-            ("AS43A", "43A"),
-            ("afasfas fasf asdf67", "67"),
+            ("324ASF", "324ASF"),
+            ("AD43", "AD43"),
+            ("AS43A", "AS43A"),
+            ("afasfas fasf asdf67", "AFASFASFASFASDF67"),
             ("45a", "45A"),
-            ("45acafs","45A"),
+            ("45acafs","45ACAFS"),
             ("45'^+'^+a", "45A"),
-            ("45asf78wr", "45A"),
-            ("'^+'afsd2342'^+'asdFGH", "2342A"),
+            ("45asf78wr", "45ASF78WR"),
+            ("'^+'afsd2342'^+'asdFGH", "AFSD2342ASDFGH"),
+            ("46B-3-B", "46B-3-B"),
+            ("XB58P-4-C", "XB58P-4-C"),
+            ("xb58q-2-d", "XB58Q-2-D")
         ]
     
     def tearDown(self):

@@ -1205,14 +1205,15 @@ class Shot(VersionableBase):
 
         # then format it
         # remove anything which is not a number or letter
-        number = re.sub(r"[^0-9a-zA-Z]+", "", number)
+        number = re.sub(r"[^0-9a-zA-Z\-]+", "", number)
 
         # remove anything which is not a number from the beginning
-        number = re.sub(
-            r"(^[^0-9]*)([0-9]*)([a-zA-Z]{0,1})([a-zA-Z0-9]*)",
-            r"\2\3",
-            number
-        ).upper()
+        #number = re.sub(
+        #    r"(^[^0-9]*)([0-9]*)([a-zA-Z]{0,1})([a-zA-Z0-9]*)",
+        #    r"\2\3",
+        #    number
+        #).upper()
+        number = number.upper()
 
         if number == "":
             raise ValueError("Shot.number is not in good format, please "
@@ -2098,8 +2099,9 @@ class Version(Base):
             # get the last published versions of the references
             published_version = ref.latest_published_version()
             # if the version number is bigger add it to the update list
-            if published_version.version_number > ref.version_number:
-                update_list.append(ref)
+            if published_version:
+                if published_version.version_number > ref.version_number:
+                    update_list.append(ref)
         
         
         return update_list
