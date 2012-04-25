@@ -405,7 +405,7 @@ class Config(object):
             },
             {
                 "name": "Scene Assembly",
-                "code": "ScnAss",
+                "code": "SceneAss",
                 "path":"{{project.code}}/Sequences/{{sequence.code}}/Shots/{{version.base_name}}/{{type.code}}",
                 "filename": "{{version.base_name}}_{{version.take_name}}_{{type.code}}_v{{'%03d'|format(version.version_number)}}_{{version.created_by.initials}}{{version.extension}}",
                 "output_path": "{{version._path}}/Output/{{version.take_name}}",
@@ -414,7 +414,7 @@ class Config(object):
                 "type_for": "Shot"
             },
             {
-                "name": "Matte Paint",
+                "name": "Matte",
                 "code": "Matte",
                 "path": "{{project.code}}/Sequences/{{sequence.code}}/Shots/{{version.base_name}}/PAINTINGS/{{type.code}}",
                 "filename": "{{version.base_name}}_{{version.take_name}}_{{type.code}}_v{{'%03d'|format(version.version_number)}}_{{version.created_by.initials}}{{version.extension}}",
@@ -424,7 +424,7 @@ class Config(object):
                 "type_for": "Shot"
             },
             {
-                "name": "Texture Paint",
+                "name": "Texture",
                 "code": "Texture",
                 "path": "{{project.code}}/Assets/{{version.base_name}}/PAINTINGS/{{type.code}}",
                 "filename": "{{version.base_name}}_{{version.take_name}}_{{type.code}}_v{{'%03d'|format(version.version_number)}}_{{version.created_by.initials}}{{version.extension}}",
@@ -435,7 +435,7 @@ class Config(object):
             },
             {
                 "name": "Illustration",
-                "code": "Illust",
+                "code": "Illustration",
                 "path": "{{project.code}}/Assets/{{version.base_name}}/PAINTINGS/{{type.code}}",
                 "filename": "{{version.base_name}}_{{version.take_name}}_{{type.code}}_v{{'%03d'|format(version.version_number)}}_{{version.created_by.initials}}{{version.extension}}",
                 "output_path": "{{version._path}}/Output/{{version.take_name}}",
