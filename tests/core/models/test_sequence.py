@@ -8,6 +8,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from sqlalchemy.exc import IntegrityError
 from oyProjectManager import db, config
 from oyProjectManager.core.models import Project, Sequence, Repository, Shot
 
@@ -280,7 +281,7 @@ class SequenceTester(unittest.TestCase):
             self.test_sequence.name = test_value[0]
             expected_name = test_value[1]
             self.assertEqual(self.test_sequence.name, expected_name)
-
+    
 class Sequence_DB_Tester(unittest.TestCase):
     """Tests the new type Sequence class with a database
     """
@@ -416,14 +417,16 @@ class Sequence_DB_Tester(unittest.TestCase):
         self.assertTrue(new_seq1.shots[0].number in expected_shot_numbers)
         
         # add a couple of shots
-        new_seq1.add_shots("2-4")
+        new_seq1.add_shots("2,3,4")
         self.assertTrue(len(new_seq1.shots)==4)
         self.assertTrue(new_seq1.shots[1].number in expected_shot_numbers)
         self.assertTrue(new_seq1.shots[2].number in expected_shot_numbers)
         self.assertTrue(new_seq1.shots[3].number in expected_shot_numbers)
         
         # add a couple of more
-        new_seq1.add_shots("5-8,10,12-15")
+        #new_seq1.add_shots("5-8,10,12-15")
+        new_seq1.add_shots("5,6,7,8,10,12,13,14,15")
+        
         self.assertTrue(len(new_seq1.shots)==13)
         self.assertTrue(new_seq1.shots[4].number in expected_shot_numbers)
         self.assertTrue(new_seq1.shots[5].number in expected_shot_numbers)
@@ -468,3 +471,83 @@ class Sequence_DB_Tester(unittest.TestCase):
         
         # and the third shots number is 1B
         self.assertEqual(new_seq.shots[2].number, "1B")
+
+    def test_name_argument_is_not_unique_for_same_project(self):
+        """testing if the name argument is not unique raises IntegrityError
+        """
+
+        test_project = Project("Test Project for Name Uniqueness")
+        test_project.save()
+        
+        test_seq1 = Sequence(test_project, "Seq1")
+        test_seq1.save()
+        
+        test_seq2 = Sequence(test_project, "Seq1")
+        self.assertRaises(IntegrityError, test_seq2.save)
+    
+    def test_name_argument_is_not_unique_for_different_projects(self):
+        """testing if no name argument is unique for different projects will
+        not raise IntegrityError
+        """
+
+        test_project1 = Project("Test Project for Name Uniqueness 1")
+        test_project1.save()
+        
+        test_project2 = Project("Test Project for Name Uniqueness 2")
+        test_project2.save()
+        
+        test_seq1 = Sequence(test_project1, "Seq1")
+        test_seq1.save()
+
+        test_seq2 = Sequence(test_project2, "Seq1")
+        test_seq2.save() # no Integrity Error
+
+    def test_code_argument_is_not_unique_for_same_project(self):
+        """testing if the code argument is not unique raises IntegrityError
+        """
+
+        test_project = Project("Test Project for Name Uniqueness")
+        test_project.save()
+
+        test_seq1 = Sequence(test_project, "Seq1A", "SEQ1")
+        test_seq1.save()
+
+        test_seq2 = Sequence(test_project, "Seq1B", "SEQ1")
+        self.assertRaises(IntegrityError, test_seq2.save)
+
+    def test_code_argument_is_not_unique_for_different_projects(self):
+        """testing if no code argument is unique for different projects will
+        not raise IntegrityError
+        """
+
+        test_project1 = Project("Test Project for Name Uniqueness 1")
+        test_project1.save()
+
+        test_project2 = Project("Test Project for Name Uniqueness 2")
+        test_project2.save()
+
+        test_seq1 = Sequence(test_project1, "SEQ1A", "SEQ1A")
+        test_seq1.save()
+        
+        test_seq2 = Sequence(test_project2, "SEQ1B", "SEQ1A")
+        test_seq2.save() # no Integrity Error
+    
+    def test_code_argumnet_is_not_unique_for_different_projects_2(self):
+        """testing if no code argument is unique for different projects will
+        not raise IntegrityError
+        """
+        
+        p1 = Project("Migros Kanguru", "MIGROS_KANGURU")
+        p1.save()
+        
+        p2 = Project("Migros M-Label", "MIGROS_M_LABEL")
+        p2.save()
+        
+        s1 = Sequence(p2, "TVC", "TVC")
+        s1.save()
+        
+        p3 = Project("Fairy Obelix Booster", "FAIRY_OBELIX_BOOSTER")
+        p3.save()
+        
+        s2 = Sequence(p3, "TVC", "TVC")
+        s2.save()

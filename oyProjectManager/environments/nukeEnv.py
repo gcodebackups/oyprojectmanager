@@ -7,6 +7,8 @@
 import os
 import platform
 
+import jinja2
+
 import nuke
 from oyProjectManager.core.models import EnvironmentBase
 from oyProjectManager import utils
@@ -52,7 +54,7 @@ class Nuke(EnvironmentBase):
         self.create_main_write_node(version)
         
         # replace read and write node paths
-        self.replace_file_path()
+        self.replace_external_paths()
         
         # create the path before saving
         try:
@@ -87,9 +89,16 @@ class Nuke(EnvironmentBase):
         # matching the current OS 
         
         # replace paths
-        self.replace_file_path()
+        self.replace_external_paths()
         
-        return True
+        # return True to specify everything was ok and an empty list
+        # for the versions those needs to be updated
+        return True, []
+
+    def post_open(self, version):
+        """the post open action for the nuke environment
+        """
+        pass
     
     def import_(self, version):
         """the import action for nuke environment
@@ -209,17 +218,20 @@ class Nuke(EnvironmentBase):
             main_write_node.setName(self._main_output_node_name)
         
         # set the output path
-        output_file_name = version.project.code
+        output_file_name = ""
         
         if version.type.type_for == "Shot":
-            output_file_name += "_" + version.version_of.sequence.code + "_"
+            output_file_name = version.project.code + "_"
+            output_file_name += version.version_of.sequence.code + "_"
+
         
         output_file_name += \
             version.base_name + "_" + \
             version.take_name + "_" + \
+            version.type.code + "_" + \
             "Output_" + \
             "v%03d" % version.version_number + "_" + \
-            version.created_by.initials + ".###.jpg"
+            version.created_by.initials + ".###.png"
         
         # check if it is a stereo comp
         # if it is enable separate view rendering
@@ -241,17 +253,17 @@ class Nuke(EnvironmentBase):
         # set the default output file type to jpeg
         platform_system = platform.system()
         
-        format_id = 7
+        format_id = 10 
         if platform_system == "Darwin":
-            format_id = 6
+            format_id = 10 
             # check the nuke version for nuke 6.2 and below
             if (nuke.NUKE_VERSION_MAJOR + nuke.NUKE_VERSION_MINOR/10.0) < 6.3:
-                format_id = 8
+                format_id = 11
         
         main_write_node["file_type"].setValue(format_id)
         main_write_node["channels"].setValue("rgb")
     
-    def replace_file_path(self):
+    def replace_external_paths(self, mode=0):
         """replaces file paths with environment variable scripts
         """
         
@@ -325,3 +337,30 @@ class Nuke(EnvironmentBase):
         
         root = self.get_root_node()
         root["project_directory"].setValue(project_directory_in)
+    
+    def create_slate_info(self):
+        """Returns info about the current shot which will contribute to the
+        shot slate
+        
+        :return: string
+        """
+        
+        version = self.get_current_version()
+        shot = version.version_of
+        
+        # create a jinja2 template
+        template = jinja2.Template("""Show: {{shot.project.name}}
+Shot: {{shot.number}}
+Frame Range: {{shot.start_frame}}-{{shot.end_frame}}
+Handles: +{{shot.handle_at_start}}, -{{shot.handle_at_end}}
+Artist: {{version.created_by.name}}
+Version: v{{'%03d'|format(version.version_number)}}
+Status: WIP
+        """)
+        
+        template_vars = {
+            "shot": shot,
+            "version": version
+        }
+        
+        return template.render(**template_vars)

@@ -4,28 +4,22 @@
 # This module is part of oyProjectManager and is released under the BSD 2
 # License: http://www.opensource.org/licenses/BSD-2-Clause
 
-import sys
 import os
+import shutil
+import sys
 import logging
+import datetime
+import jinja2
 from sqlalchemy.exc import IntegrityError
 
 from sqlalchemy.sql.expression import distinct
 
-#from PySide import QtGui, QtCore
-import sip
-sip.setapi('QString', 2)
-sip.setapi('QVariant', 2)
-from PyQt4 import QtGui, QtCore
 
-import version_creator_UI
-
-import oyProjectManager
-from oyProjectManager import utils, config, db
+from oyProjectManager import config, db
 from oyProjectManager.core.models import (Asset, Project, Sequence, Repository,
                                           Version, VersionType, Shot, User,
                                           VersionTypeEnvironments)
-from oyProjectManager.environments import environmentFactory
-from oyProjectManager.ui import version_updater, singletonQApplication
+from oyProjectManager.ui import version_updater
 
 logger = logging.getLogger('beaker.container')
 logger.setLevel(logging.WARNING)
@@ -35,6 +29,22 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.WARNING)
 
 conf = config.Config()
+
+qt_module_key = "PREFERRED_QT_MODULE"
+qt_module = "PyQt4"
+
+if os.environ.has_key(qt_module_key):
+    qt_module = os.environ[qt_module_key]
+
+if qt_module == "PySide":
+    from PySide import QtGui, QtCore
+    from oyProjectManager.ui import version_creator_UI_pyside as version_creator_UI
+elif qt_module == "PyQt4":
+    import sip
+    sip.setapi('QString', 2)
+    sip.setapi('QVariant', 2)
+    from PyQt4 import QtGui, QtCore
+    from oyProjectManager.ui import version_creator_UI_pyqt4 as version_creator_UI
 
 def UI(environment):
     """the UI to call the dialog by itself
@@ -51,7 +61,7 @@ def UI(environment):
     else:
         app = QtGui.QApplication.instance()
     
-    mainDialog = MainDialog_New(environment)
+    mainDialog = MainDialog(environment)
     mainDialog.show()
     #app.setStyle('Plastique')
     app.exec_()
@@ -68,1581 +78,6 @@ def UI(environment):
 
 
 class MainDialog(QtGui.QDialog, version_creator_UI.Ui_Dialog):
-    """the main dialog of the system which helps to create new versions
-    """
-    
-    def __init__(self, environmentName=None, parent=None):
-        super(MainDialog, self).__init__(parent)
-        self.setupUi(self)
-        
-        # change the window title
-        environmentTitle = ''
-        if environmentName is not None:
-            environmentTitle = environmentName
-        
-        self._environmentFactory = environmentFactory.EnvironmentFactory()
-        
-        self.setWindowTitle(
-            environmentTitle + ' | ' + self.windowTitle() + \
-            ' | ' + 'oyProjectManager v' + oyProjectManager.__version__
-        )
-        
-        # center to the window
-        self._centerWindow()
-        
-        
-        # setup validators
-        self._setupValidators()
-        
-        # create a repository object
-        self._repo = Repository()
-        
-        # fill them later
-        self._asset = None
-        self._environment = None
-        self._project = None
-        self._sequence = None
-        self._versionListBuffer = []
-        self._lastValidShotSelection = None
-        
-        # create the environment object
-        self._setEnvironment( environmentName )
-        
-        self.fileName = ''
-        self.path = ''
-        self.fullPath = ''
-        
-        # setup signals
-        self._setupSignals()
-        
-        self._setDefaults()
-        self.update_project_list()
-        
-        self.getSettingsFromEnvironment()
-    
-    def _setEnvironment(self, environmentName):
-        """sets the environment object from the environment name
-        """
-        self._environment = self._environmentFactory.create(self._asset, environmentName)
-    
-    def _setupSignals(self):
-        """sets up the signals/slots
-        """
-        
-        # connect SIGNALs
-        # SAVE
-        QtCore.QObject.connect( self.save_button,
-                                QtCore.SIGNAL("clicked()"),
-                                self.saveAsset )
-        
-        # EXPORT
-        QtCore.QObject.connect( self.export_button,
-                                QtCore.SIGNAL("clicked()"),
-                                self.exportAsset )
-        
-        # OPEN
-        QtCore.QObject.connect( self.open_button,
-                                QtCore.SIGNAL("clicked()"),
-                                self.openAsset )
-        # add double clicking to assetList too
-        QtCore.QObject.connect( self.assets_tableWidget1,
-                                QtCore.SIGNAL("cellDoubleClicked(int,int)"),
-                                self.openAsset )
-        
-        # REFERENCE
-        QtCore.QObject.connect( self.reference_button,
-                                QtCore.SIGNAL("clicked()"),
-                                self.referenceAsset )
-        
-        # IMPORT
-        QtCore.QObject.connect( self.import_button,
-                                QtCore.SIGNAL("clicked()"),
-                                self.importAsset )
-        
-        # validate input texts
-        #QtCore.QObject.connect( self.note_lineEdit1,
-                                #QtCore.SIGNAL("textChanged(QString)"),
-                                #self.validateNotes )
-        
-        # close button
-        QtCore.QObject.connect( self.close_button,
-                                QtCore.SIGNAL("clicked()"),
-                                self.close )
-        
-        # project change ---> update sequence
-        QtCore.QObject.connect( self.project_comboBox,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self._updateProjectObject )
-        
-        QtCore.QObject.connect( self.project_comboBox,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateSequenceList )
-        
-        # sequence change ---> update noSubNameField
-        QtCore.QObject.connect( self.sequence_comboBox,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self._updateSequenceObject )
-        
-        QtCore.QObject.connect( self.sequence_comboBox,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateForNoSubName )
-        
-        # sequence change ---> update asset type
-        QtCore.QObject.connect( self.sequence_comboBox,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateAssetTypeList )
-        
-        # sequence change ---> update shot lists
-        QtCore.QObject.connect( self.sequence_comboBox,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateShotList )
-        
-        # type change ---> base and shot enable disable
-        QtCore.QObject.connect( self.assetType_comboBox1,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateShotDependentFields )
-        
-        # type change ---> fill baseName comboBox and update subName
-        QtCore.QObject.connect( self.assetType_comboBox1,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateBaseNameField )
-        
-        QtCore.QObject.connect( self.assetType_comboBox1,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateSubNameField )
-        
-        # shotName change ---> update frame ranges
-        QtCore.QObject.connect( self.shot_comboBox1,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateShotDataFields )
-        
-        # shotName or baseName change ---> fill subName comboBox
-        QtCore.QObject.connect( self.shot_comboBox1,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateSubNameField )
-        
-        QtCore.QObject.connect( self.baseName_lineEdit,
-                                QtCore.SIGNAL("textChanged(QString)"),
-                                self.updateSubNameField )
-        
-        # subName change ---> full update assets_tableWidget1
-        QtCore.QObject.connect( self.project_comboBox,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.fullUpdateAssetsTableWidget )
-        
-        QtCore.QObject.connect( self.sequence_comboBox,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.fullUpdateAssetsTableWidget )
-        
-        QtCore.QObject.connect( self.assetType_comboBox1,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.fullUpdateAssetsTableWidget )
-        
-        QtCore.QObject.connect( self.shot_comboBox1,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.fullUpdateAssetsTableWidget )
-        
-        QtCore.QObject.connect( self.baseName_lineEdit,
-                                QtCore.SIGNAL("textChanged(QString)"),
-                                self.fullUpdateAssetsTableWidget )
-        
-        QtCore.QObject.connect( self.subName_lineEdit,
-                                QtCore.SIGNAL("textChanged(QString)"),
-                                self.fullUpdateAssetsTableWidget )
-        
-        # get latest revision --> revision
-        QtCore.QObject.connect( self.revision_pushButton,
-                                QtCore.SIGNAL("clicked()"),
-                                self.updateRevisionToLatest )
-        
-        # get latest version --> version
-        QtCore.QObject.connect( self.version_pushButton,
-                                QtCore.SIGNAL("clicked()"),
-                                self.updateVersionToLatest )
-        
-        # sequence, type, shotName, baseName or subName change --> revision + version
-        QtCore.QObject.connect( self.sequence_comboBox,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateRevisionToLatest )
-        
-        QtCore.QObject.connect( self.sequence_comboBox,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateVersionToLatest )
-        
-        QtCore.QObject.connect( self.assetType_comboBox1,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateRevisionToLatest )
-        
-        QtCore.QObject.connect( self.assetType_comboBox1,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateVersionToLatest )
-        
-        QtCore.QObject.connect( self.shot_comboBox1,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateRevisionToLatest )
-        
-        QtCore.QObject.connect( self.shot_comboBox1,
-                                QtCore.SIGNAL("currentIndexChanged(int)"),
-                                self.updateVersionToLatest )
-        
-        QtCore.QObject.connect( self.baseName_lineEdit,
-                                QtCore.SIGNAL("textChanged(QString)"),
-                                self.updateRevisionToLatest )
-        
-        QtCore.QObject.connect( self.baseName_lineEdit,
-                                QtCore.SIGNAL("textChanged(QString)"),
-                                self.updateVersionToLatest )
-        
-        QtCore.QObject.connect( self.subName_lineEdit,
-                                QtCore.SIGNAL("textChanged(QString)"),
-                                self.updateRevisionToLatest )
-        
-        QtCore.QObject.connect( self.subName_lineEdit,
-                                QtCore.SIGNAL("textChanged(QString)"),
-                                self.updateVersionToLatest )
-        
-        # showLastNEntry_checkbox or numberOfEntry change -> partial update assets_tableWidget1
-        QtCore.QObject.connect( self.showLastNEntry_checkBox,
-                                QtCore.SIGNAL("stateChanged(int)"),
-                                self.partialUpdateAssetsTableWidget )
-        
-        QtCore.QObject.connect( self.numberOfEntry_spinBox,
-                                QtCore.SIGNAL("valueChanged(int)"),
-                                self.partialUpdateAssetsTableWidget )
-        
-        # baseName_listWidget -> baseName_lineEdit
-        # subName_listWidget -> subName_lineEdit
-        QtCore.QObject.connect( self.baseName_listWidget,
-                                QtCore.SIGNAL("currentTextChanged(QString)"),
-                                self.updateBaseNameLineEdit )
-        
-        QtCore.QObject.connect( self.subName_listWidget,
-                                QtCore.SIGNAL("currentTextChanged(QString)"),
-                                self.updateSubNameLineEdit )
-        
-        QtCore.QMetaObject.connectSlotsByName(self)
-    
-    def _setupValidators(self):
-        """sets up the input validators
-        """
-        
-        ## new item to the baseName_listWidget
-        #QtCore.QObject.connect(self.baseName_listWidget, QtCore.SIGNAL("itemDoubleClicked(QListWidgetItem*)"), self.addNewListItem )
-        
-        # attach validators
-        QtCore.QObject.connect( self.baseName_lineEdit,
-                                QtCore.SIGNAL("textChanged(QString)"),
-                                self.validateBaseName )
-        
-        QtCore.QObject.connect( self.subName_lineEdit,
-                                QtCore.SIGNAL("textChanged(QString)"),
-                                self.validateSubName )
-    
-    def _centerWindow(self):
-        """centers the window to the screen
-        """
-        
-        screen = QtGui.QDesktopWidget().screenGeometry()
-        size =  self.geometry()
-        self.move(
-            (screen.width()-size.width()) * 0.5,
-            (screen.height()-size.height()) * 0.5
-        )
-    
-    def _setDefaults(self):
-        """sets the default values
-        """
-        
-        # set sub name to MAIN by default
-        self.subName_listWidget.clear()
-        self.subName_listWidget.addItem( "MAIN" )
-        
-        # append the users to the users list
-        userInits = self._repo.user_initials
-        
-        self.user_comboBox1.clear()
-        self.user_comboBox1.addItems( userInits )
-        
-        # update the user with the last selected user
-        last_user = self._repo.last_user
-        
-        userIndex = -1
-        if last_user != '' and last_user is not None:
-            userIndex = self.user_comboBox1.findText(last_user) 
-        
-        if userIndex == -1:
-            userIndex = 0
-        
-        self.user_comboBox1.setCurrentIndex( userIndex )
-        
-        # add the assets_tableWidget1 horizontal header labels
-        self._horizontalLabels = [ 'Asset FileName', 'File Size', 'Date Updated' ]
-        self.assets_tableWidget1.setHorizontalHeaderLabels( self._horizontalLabels )
-        
-        # set spinbox default value to 10
-        self.numberOfEntry_spinBox.setValue(10)
-    
-    def fillFieldsFromFileInfo(self):
-        """fills the ui fields from the data that comes from the fileName and
-        path
-        """
-        
-        # no use without the path
-        if self.path is None or self.path == '':
-            return
-        
-        # get the project and sequence names
-        projectName, sequenceName = \
-            self._repo.get_project_and_sequence_name_from_file_path( self.path )
-        
-        if projectName is None or projectName == '' or sequenceName is None \
-            or sequenceName == '':
-            return
-        
-        currentProject = Project( projectName )
-        
-        if not currentProject.exists:
-            return
-        
-        currentSequence = Sequence( currentProject, sequenceName )
-        
-        if not currentSequence.exists:
-            return
-        
-        # set the project and sequence
-        self.setProjectName( projectName )
-        self.setSequenceName( sequenceName )
-        
-        # no file name no use of the rest
-        if self.fileName is None:
-            return
-        
-        # fill the fields with those info
-        # create an asset with the file name and get the information from that asset object
-        
-        assetObj = Asset( currentProject, currentSequence, self.fileName )
-        
-        if not assetObj.isValidAsset and not assetObj.exists:
-            return
-        
-        # set the asset of the environment
-        self._environment._asset = assetObj
-        
-        assetType = assetObj.type.name
-        shotNumber = assetObj.shotNumber
-        baseName = assetObj.baseName
-        subName = assetObj.subName
-        revNumber = assetObj.revisionNumber
-        verNumber = assetObj.versionNumber
-        userInitials = assetObj.userInitials
-        notes = assetObj.notes
-        
-        # fill the fields
-        # assetType
-        element = self.assetType_comboBox1
-        element.setCurrentIndex( element.findText( assetType ) )
-        
-        # ----------------------------------------------------------------------
-        # shotNumber and baseName
-        if assetObj.isShotDependent:
-            element = self.shot_comboBox1
-            element.setCurrentIndex( element.findText( shotNumber) )
-            
-            # update self._lastValidShotSelection
-            self._lastValidShotSelection = shotNumber
-        
-        else:
-            
-            itemIndex = self.findListItemWithText( self.baseName_listWidget, baseName )
-            if itemIndex != -1:
-                # get the item and set it selected and current item on the list
-                item = self.baseName_listWidget.item( itemIndex )
-                item.setSelected(True)
-                self.baseName_listWidget.setCurrentItem( item )
-                
-                # update the selection
-                self.updateBaseNameLineEdit( baseName )
-        # ----------------------------------------------------------------------
-        
-        
-        
-        # ----------------------------------------------------------------------
-        # sub Name
-        if not currentSequence.no_sub_name_field: # remove this block when the support for old version becomes obsolute
-            
-            itemIndex = self.findListItemWithText( self.subName_listWidget, subName )
-            if itemIndex != -1:
-                # get the item and set it selected and current item on the list
-                item = self.subName_listWidget.item( itemIndex )
-                item.setSelected(True)
-                self.subName_listWidget.setCurrentItem( item )
-                
-                self.updateSubNameLineEdit( subName )
-        # ----------------------------------------------------------------------
-        
-        
-        # revision
-        self.revision_spinBox.setValue( revNumber )
-        
-        # version : set the version and increase it by one
-        self.version_spinBox.setValue( verNumber )
-        self.updateVersionToLatest()
-        
-        # notes
-        self.note_lineEdit1.setText( notes )
-    
-    def update_project_list(self):
-        """updates projects list
-        """
-        
-        server_path = self._repo.server_path
-        
-        projectsList = self._repo.valid_projects
-        projectsList.sort()
-        
-        self.server_comboBox.clear()
-        self.project_comboBox.clear()
-        self.server_comboBox.addItem( server_path )
-        self.project_comboBox.addItems( projectsList )
-    
-    def updateSequenceList(self, *arg):
-        """updates the sequence according to selected project
-        """
-        
-        self._updateProjectObject()
-        currentProject = self._project
-        
-        # create a project and ask the child sequences
-        self.sequence_comboBox.clear()
-        sequences = currentProject.sequenceNames()
-        
-        self.sequence_comboBox.addItems( sequences )
-        
-        self._updateSequenceObject() # it is not needed but do it for now
-    
-    def updateAssetTypeList(self):
-        """updates asset types
-        """
-        
-        # get the asset types of that sequence
-        self._updateSequenceObject()
-        currentSequence = self._sequence
-        
-        # get asset types
-        assetTypes = currentSequence.getAssetTypes( self._environment.name )
-        
-        assetTypeNames = [ assetType.name for assetType in assetTypes ]
-        
-        
-        # clear and update the comboBoxes
-        # try to keep the same item in the list
-        lastSelectedItem = self.assetType_comboBox1.currentText()
-        self.assetType_comboBox1.clear()
-        self.assetType_comboBox1.addItems( assetTypeNames )
-        # reselect the last selected item
-        
-        if lastSelectedItem != "":
-            self.assetType_comboBox1.setCurrentIndex( self.assetType_comboBox1.findText( lastSelectedItem ) )
-    
-    def updateShotList(self):
-        """updates shot list
-        """
-        
-        self._updateSequenceObject()
-        
-        # try to keep the selection
-#        lastSelectedShot = self.shot_comboBox1.currentText()
-        
-        # clear and update the list
-        self.shot_comboBox1.clear()
-        self.shot_comboBox1.addItems( self._sequence.shotList )
-        
-        index = -1
-        
-        if self._lastValidShotSelection != "" and \
-           self._lastValidShotSelection is not None:
-            index = self.assetType_comboBox1.findText( self._lastValidShotSelection )
-            
-            if index != -1:
-                self.shot_comboBox1.setCurrentIndex( index )
-            
-        else:
-            self._lastValidShotSelection = self.assetType_comboBox1.currentText()
-    
-    def updateBaseNameField(self):
-        """updates the baseName fields with current asset baseNames for selected
-        type, if the type is not shot dependent
-        """
-        
-        # if the current selected type is not shot dependent
-        # get all the assets of that type and get their baseNames
-
-        self._updateSequenceObject()
-        currentSequence = self._sequence
-        
-        currentTypeName = self.getCurrentAssetType()
-        
-        if currentTypeName is None:
-            return
-        
-        currentType = currentSequence.getAssetTypeWithName( currentTypeName )
-        
-        if currentType is None or currentType.isShotDependent:
-            # do nothing
-            return
-        
-        # remove duplicates
-        baseNamesList = currentSequence.getAssetBaseNamesForType( currentTypeName )
-        
-        # add them to the baseName combobox
-        self.baseName_listWidget.clear()
-        
-        # add the list
-        self.baseName_listWidget.addItems( sorted(baseNamesList) )
-        
-        # select the first one in the list
-        if len(baseNamesList) > 0:
-            listItem = self.baseName_listWidget.item(0)
-            #assert(isinstance(listItem, QtGui.QListWidgetItem ))
-            listItem.setSelected(True)
-            
-            self.updateBaseNameLineEdit( listItem.text() )
-    
-    def updateBaseNameLineEdit(self, baseName):
-        """updates the baseName_lineEdit according to the selected text in the
-        baseName_listWidget
-        """
-        
-        self.baseName_lineEdit.setText( baseName )
-    
-    def updateSubNameField(self):
-        """updates the subName fields with current asset subNames for selected
-        baseName, if the type is not shot dependent
-        """
-        
-        # if the current selected type is not shot dependent
-        # get all the assets of that type and get their baseNames
-        self._updateSequenceObject()
-        currentSequence = self._sequence
-        
-        # if the current sequence doesn't support subName field just return
-        if currentSequence.no_sub_name_field:
-            self.subName_listWidget.clear()
-            return
-        
-        currentAssetTypeName = self.getCurrentAssetType()
-        
-        assetTypeObj = currentSequence.getAssetTypeWithName( currentAssetTypeName )
-        
-        if assetTypeObj is None:
-            # clear the current subName field and return
-            self.subName_listWidget.clear()
-            return
-        
-        if assetTypeObj.isShotDependent:
-            currentBaseName = currentSequence.convertToShotString( self.getCurrentShotString() )
-        else:
-            currentBaseName = self.getCurrentBaseName()
-        
-        self.subName_listWidget.clear()
-        
-        if currentAssetTypeName is None or currentBaseName is None:
-            return
-        
-        currentAssetType = currentSequence.getAssetTypeWithName( currentAssetTypeName )
-        
-        if currentAssetType is None:
-            # do nothing
-            return
-        
-        # get the asset files of that type
-        allAssetFileNames = currentSequence.getAllAssetFileNamesForType( currentAssetTypeName )
-        
-        # filter for base name
-        allAssetFileNamesFiltered = currentSequence.filterAssetNames( allAssetFileNames, baseName=currentBaseName, typeName=currentAssetTypeName ) 
-        
-        # get the subNames
-        curSGFIV = currentSequence.generateFakeInfoVariables
-        subNamesList = [ curSGFIV(assetFileName)['subName'] for assetFileName in allAssetFileNamesFiltered ]
-        
-        # add MAIN by default
-        subNamesList.append('MAIN')
-        
-        # remove duplicates
-        subNamesList = utils.unique( subNamesList )
-        
-        # add them to the baseName combobox
-        
-        # do not add an item for new items, the default should be MAIN
-        # add the list
-        self.subName_listWidget.addItems( sorted(subNamesList) )
-        
-        # update subName line edit
-        self.updateSubNameLineEdit( 'MAIN' ) #, 'updateSubNameField' )
-    
-    def updateSubNameLineEdit( self, subName ):#, caller_id=None):
-        """updates the subName_lineEdit according to the selected text in the
-        subName_listWidget
-        """
-        #print "updateSubNAmeLineEdit.caller_id -> ", caller_id
-        #print "subName -> ", subName
-        self.subName_lineEdit.setText( subName )
-    
-    
-    
-    #
-    #def updateSubNameLineEditFromSignal(self):
-        #"""updates the subName_lineEdit triggered by a signal
-        #"""
-        
-        
-        
-        ## get the current item text
-        ##itemIndex = self.findListItemWithText( self.subName_listWidget, 
-        
-        #text = self.subName_listWidget.
-    
-    def updateShotDependentFields(self):
-        """updates shot dependent fields like the shotList and baseName
-        """
-        
-        self._updateSequenceObject()
-        currentSequence = self._sequence
-        
-        # get selected asset type name
-        assetTypeName = self.getCurrentAssetType()
-        
-        assetType = currentSequence.getAssetTypeWithName( assetTypeName )
-        
-        if assetType is None:
-            return
-        
-        # enable the shot if the asset type is shot dependent
-        isShotDependent = assetType.isShotDependent
-        self.shot_comboBox1.setEnabled( isShotDependent )
-        
-        self.baseName_listWidget.setEnabled( not isShotDependent )
-        self.baseName_lineEdit.setEnabled( not isShotDependent )
-    
-    def updateVersionListBuffer(self):
-        """updates the version list buffer
-        """
-        
-        self._updateProjectObject()
-        self._updateSequenceObject()
-        
-        currentProject = self._project
-        currentSequence = self._sequence
-        
-        typeName = self.getCurrentAssetType()
-        
-        if typeName == '' or typeName is None:
-            return
-        
-        # if the type is shot dependent get the shot number
-        # if it is not use the baseName
-        if currentSequence.getAssetTypeWithName( typeName ).isShotDependent:
-            baseName = currentSequence.convertToShotString( self.getCurrentShotString() )
-        else:
-            baseName = self.getCurrentBaseName()
-        
-        
-        if not currentSequence.no_sub_name_field:
-            subName = self.getCurrentSubName()
-        else:
-            subName = ''
-        
-        # construct the dictionary
-        assetInfo = dict()
-        assetInfo['baseName'] = baseName
-        assetInfo['subName' ] = subName
-        assetInfo['typeName'] = typeName
-        
-        # get all asset files of that type
-        allAssetFileNames = currentSequence.getAllAssetFileNamesForType( typeName )
-        # filter for assetInfo
-        allAssetFileNamesFiltered = currentSequence.filterAssetNames( allAssetFileNames, **assetInfo ) 
-        
-        # get the fileNames
-        currSGFIV = currentSequence.generateFakeInfoVariables
-        allVersionsList = [ currSGFIV(assetFileName)['fileName'] for assetFileName in allAssetFileNamesFiltered ]
-        
-        self._versionListBuffer = []
-        
-        if len(allVersionsList) > 0:
-            self._versionListBuffer = sorted( filter( self._environment.hasValidExtension, allVersionsList ) )
-    
-    def partialUpdateAssetsTableWidget(self):
-        """just updates if the number of maximum displayable entry is changed
-        """
-        
-        if self.showLastNEntry_checkBox.isChecked():
-            
-            # get the number of entry
-            numOfEntry = min( len(self._versionListBuffer), self.numberOfEntry_spinBox.value() )
-            
-            # fill the list
-            _buffer = self._versionListBuffer[-numOfEntry:]
-            
-        else:
-            _buffer = self._versionListBuffer
-        
-        self.fillAssetsTableWidget( _buffer )
-    
-    def fillAssetsTableWidget(self, assetFileNames):
-        """fills the assets table widget with given assets
-        """
-        
-        assetCount = len(assetFileNames)
-        
-        
-        self.assets_tableWidget1.clear()
-        self.assets_tableWidget1.setRowCount( assetCount )
-        
-        # set the labels
-        self.assets_tableWidget1.setHorizontalHeaderLabels( self._horizontalLabels )
-        
-        data = []
-        
-        if not assetCount:
-            return
-        
-        for i,assetFileName in enumerate(assetFileNames):
-            #assert( isinstance(asset, Asset))
-            
-            if assetFileName is None:
-                continue
-            
-            assetObj = Asset( self._project, self._sequence, assetFileName )
-            
-            fileName = assetObj.fileName
-            fileSize = assetObj.fileSizeFormated
-            dateUpdated = assetObj.dateUpdated
-            
-            if fileName is None or dateUpdated is None or fileSize is None:
-                continue
-            
-            #print fileName, dateUpdated
-            data.append( ( assetObj, fileName, fileSize, dateUpdated ) )
-            
-            # ------------------------------------
-            # asset fileName
-            assetFileName_tableWI = QtGui.QTableWidgetItem( fileName )
-            # align to left and vertical center
-            assetFileName_tableWI.setTextAlignment( 0x0001 | 0x0080  )
-            self.assets_tableWidget1.setItem( i, 0, assetFileName_tableWI )
-            # ------------------------------------
-            
-            # ------------------------------------
-            # asset fileSize
-            assetFileSize_tableWI = QtGui.QTableWidgetItem( fileSize )
-            # align to center and vertical center
-            assetFileSize_tableWI.setTextAlignment( 0x0002 | 0x0080  )
-            self.assets_tableWidget1.setItem( i, 1, assetFileSize_tableWI )
-            # ------------------------------------
-            
-            # ------------------------------------
-            # asset dateUpdated
-            assetDateUpdated_tableWI = QtGui.QTableWidgetItem( dateUpdated )
-            # align to left and vertical center
-            assetDateUpdated_tableWI.setTextAlignment( 0x0004 | 0x0080  )
-            self.assets_tableWidget1.setItem( i, 2, assetDateUpdated_tableWI )
-            # ------------------------------------
-        
-        # check and create the table data attr
-        setattr( self.assets_tableWidget1, 'tableData', data )
-        
-        # resize the first column
-        self.assets_tableWidget1.resizeColumnToContents(0)
-    
-    def fullUpdateAssetsTableWidget(self):
-        """invokes a version list buffer update and a assets list widget update
-        """
-        self.updateVersionListBuffer()
-        self.partialUpdateAssetsTableWidget()
-    
-    def getCurrentProjectName(self):
-        """returns the current project name
-        """
-        return unicode( self.project_comboBox.currentText() )
-    
-    def getCurrentSequenceName(self):
-        """returns the current sequence name
-        """
-        return unicode( self.sequence_comboBox.currentText() )
-    
-    def getCurrentAssetType(self):
-        """returns the current assetType from the UI
-        """
-        return unicode( self.assetType_comboBox1.currentText() )
-    
-    def getCurrentShotString(self):
-        """returns the current shot string from the UI
-        """
-        return unicode( self.shot_comboBox1.currentText() )
-    
-    def getCurrentBaseName(self):
-        """returns the current baseName from the UI
-        """
-        #return unicode( self.baseName_comboBox1.currentText() )
-        return unicode( self.baseName_lineEdit.text() )
-    
-    def getCurrentSubName(self):
-        """returns the current subName from the UI
-        """
-        return unicode( self.subName_lineEdit.text() )
-    
-    def getCurrentRevNumber(self):
-        """returns the current revision number from the UI
-        """
-        return unicode( self.revision_spinBox.value() )
-    
-    def getCurrentVerNumber(self):
-        """returns the current version number from the UI
-        """
-        return unicode( self.version_spinBox.value() )
-    
-    def getCurrentUserInitials(self):
-        """returns the current user initials from the UI
-        """
-        return unicode( self.user_comboBox1.currentText() )
-    
-    def getCurrentNote(self):
-        """returns the current note from the UI
-        """
-        return unicode( self.note_lineEdit1.text() )
-    
-    def updateRevisionToLatest(self):
-        """ tries to get the latest revision
-        """
-        
-        # get the asset object from fields
-        self._createAssetObjectFromSaveFields()
-        
-        if self._asset is None or not self._asset.isValidAsset:
-            self.setRevisionNumberField( 0 )
-            return
-        
-        maxRevAsset, maxRevNumber = self._asset.latestRevision2
-        
-        if maxRevNumber is None:
-            maxRevNumber = 0
-            
-        # update the field
-        self.setRevisionNumberField( maxRevNumber )
-    
-    def updateVersionToLatest(self):
-        """ tries to get the latest version
-        """
-        
-        # get the asset object from fields
-        self._createAssetObjectFromSaveFields()
-        
-        if self._asset is None or not self._asset.isValidAsset:
-            self.setVersionNumberField( 1 )
-            return
-        
-        maxVerAsset, maxVerNumber = self._asset.latestVersion2
-        
-        if maxVerNumber is None:
-            maxVerNumber = 0
-        
-        # update the field
-        self.setVersionNumberField( maxVerNumber + 1 )
-    
-    def setProjectName(self, projectName):
-        """sets the project in the combobox
-        """
-        if projectName is None:
-            return
-        
-        index = self.project_comboBox.findText( projectName )
-        
-        if index != -1:
-            self.project_comboBox.setCurrentIndex( index )
-        
-        # be sure it is updated
-        self.project_comboBox.update()
-    
-    def setSequenceName(self, sequenceName):
-        """sets the sequence in the combobox
-        """
-        if sequenceName is None:
-            return
-        
-        currentIndex = self.sequence_comboBox.currentIndex()
-        
-        index = self.sequence_comboBox.findText( sequenceName )
-        
-        if index != -1:
-            self.sequence_comboBox.setCurrentIndex( index )
-        
-        # be sure it is updated
-        self.sequence_comboBox.update()
-    
-    def _createAssetObjectFromSaveFields(self):#, caller_id=None):
-        """returns the asset object from the fields
-        """
-        
-        if self._project is None or self._sequence is None:
-            return None
-        
-        assetObj = Asset( self._project, self._sequence )
-        
-        # gather information
-        typeName = self.getCurrentAssetType()
-        
-        assetTypeObj = self._sequence.getAssetTypeWithName(typeName)
-        
-        if assetTypeObj is None:
-            return
-        
-        isShotDependent = assetTypeObj.isShotDependent
-        if isShotDependent:
-            baseName = self._sequence.convertToShotString( self.getCurrentShotString() )
-        else:
-            baseName = self.getCurrentBaseName()
-        
-        subName = self.getCurrentSubName()
-        rev = self.getCurrentRevNumber()
-        ver = self.getCurrentVerNumber()
-        userInitials = self.getCurrentUserInitials()
-        notes = self.getCurrentNote()
-        
-        
-        #print "_createAssetObjectFromSaveFields, caller_id ->", caller_id
-        #print "baseName -> ", baseName
-        #print "subName -> ", subName
-        
-        
-        # construct info variables
-        infoVars = dict()
-        infoVars['baseName'] = baseName
-        infoVars['subName'] = subName
-        infoVars['typeName'] = typeName
-        infoVars['rev'] = rev
-        infoVars['ver'] = ver
-        infoVars['userInitials'] = userInitials
-        infoVars['notes'] = notes
-        
-        assetObj.setInfoVariables( **infoVars )
-        
-        self._asset = assetObj
-        ## set the environment to the current asset object
-        #self._environment.asset = self._asset
-    
-    def _createAssetObjectFromOpenFields(self):
-        """retrieves the file name from the open asset fields
-        """
-        
-        index = self.assets_tableWidget1.currentIndex().row()
-        assetFileName = unicode(self.assets_tableWidget1.tableData[index][1])
-        self._updateProjectObject()
-        self._updateSequenceObject()
-        self._asset = Asset(self._project, self._sequence, assetFileName)
-        #self._environment.asset = self._asset
-    
-    def _getAssetObjectFromOpenFields(self):
-        """retrieves the file name from the open asset fields
-        """
-        
-        index = self.assets_tableWidget1.currentIndex().row()
-        assetFileName = unicode(self.assets_tableWidget1.tableData[index][1])
-        self._updateProjectObject()
-        self._updateSequenceObject()
-        return Asset(self._project, self._sequence, assetFileName)
-    
-    def getFileNameFromSaveFields(self):
-        """returns the file name from the fields
-        """
-        # get the asset object from fields
-        self._createAssetObjectFromSaveFields()
-        
-        if self._asset is None:
-            return None, None
-        
-        return self._asset.pathVariables, self._asset
-    
-    def setRevisionNumberField(self, revNumber):
-        """sets the revision number field in the interface
-        """
-        self.revision_spinBox.setValue( revNumber )
-    
-    def setVersionNumberField(self, verNumber):
-        """sets the version number field in the interface
-        """
-        self.version_spinBox.setValue( verNumber )
-    
-    def updateShotDataFields(self, index):
-        """updates the shot data fields like the frame range fields and the
-        shot description fields according to the current shot
-        """
-        
-        # get the shot object from the sequence
-        shot = self._sequence.shots[ index ]
-        
-        self.startFrame_spinBox.setValue( shot.startFrame )
-        self.endFrame_spinBox.setValue( shot.endFrame )
-        
-        self.shotDescription_textEdit.setText( shot.description )
-    
-    def updateForNoSubName(self):
-        """this method will be removed in later version, it is written just to support
-        old types of assets those have no subName field
-        """
-        
-        # if the current sequence has no support for subName fields disable them
-        self._updateSequenceObject()
-        currentSequence = self._sequence
-        
-        self.subName_listWidget.setEnabled(not currentSequence.no_sub_name_field)
-        self.subName_lineEdit.setEnabled(not currentSequence.no_sub_name_field)
-    
-    def _updateProjectObject(self):
-        """updates the project object if it is changed
-        it is introduced to take advantage of the cache system
-        """
-        
-        currentProjectName = self.getCurrentProjectName()
-        
-        if self._project is None or \
-           self._project.name != currentProjectName or \
-           (currentProjectName != "" or currentProjectName is not None ):
-            self._project = Project( currentProjectName )
-    
-    def _updateSequenceObject(self):
-        """updates the sequence object if it is not
-        """
-        
-        currentSequenceName = self.getCurrentSequenceName()
-        
-        #assert(isinstance(self._sequence,Sequence))
-        if self._sequence is None or \
-           self._sequence.name != currentSequenceName and \
-           (currentSequenceName != "" or currentSequenceName is not None ) or \
-           self._sequence.projectName != self._project.name:
-            self._updateProjectObject()
-            newSeq = Sequence( self._project, currentSequenceName )
-            if newSeq._exists:
-                self._sequence = newSeq
-    
-    def validateSubName(self, text):
-        """validates the subName field by removing unnecessary characters
-        """
-        
-        # just replace the validated text
-        self.subName_lineEdit.setText( self.fieldNameValidator(text) )
-    
-    def validateBaseName(self, text):
-        """validates the baseName field by removing unnecessary characters
-        """
-        
-        # just replace the validated text
-        self.baseName_lineEdit.setText( self.fieldNameValidator(text) )
-    
-    def fieldNameValidator(self, text):
-        """a validator that validates input texts
-        """
-        text = unicode(text)
-        
-        if not len(text):
-            return text
-        
-        # first remove invalid chars
-        text = utils.invalidCharacterRemover(text, utils.validFileNameChars)
-        
-        # validate the text
-        text = utils.stringConditioner(text, capitalize=False)
-        
-        # capitalize just the first letter
-        text = text[0].upper() + text[1:]
-        
-        return text
-    
-    def addNewListItem(self, inputItem):
-        """adds new base name to the list
-        """
-        
-        assert(isinstance(inputItem, QtGui.QListWidgetItem))
-        inputItemText = inputItem.text()
-        
-        parentListWidget = inputItem.listWidget()
-        assert(isinstance(parentListWidget, QtGui.QListWidget))
-        
-        # go ahead if user double clicked on the newItemText
-        if hasattr( parentListWidget, 'newItemText' ):
-            checkItemText = getattr( parentListWidget, 'newItemText' )
-            
-            if inputItemText == checkItemText:
-                # pop up an input form to ask the user for the new item name
-                newItemName, ok = QtGui.QInputDialog.getText(
-                    self,
-                    'Enter new item name',
-                    'Enter a new item name please:'
-                )
-                
-                if ok:
-                    # validate the input
-                    if hasattr( parentListWidget, 'validator' ):
-                        newItemName = eval('parentListWidget.validator( newItemName )')
-                    
-                    # add the new item to the list
-                    parentListWidget.addItem( newItemName )
-    
-    def findListItemWithText(self, listWidget, text):
-        """returns the item index with given index
-        """
-        
-        itemCount = listWidget.count()
-        
-        for i in range(itemCount):
-            currentItem = listWidget.item(i)
-            #assert(isinstance(currentItem, QtGui.QListWidgetItem ))
-            #print currentItem.text()
-            if currentItem.text() == text:
-                return i
-        
-        return -1
-    
-    # ENVIRONMENT PREPARATION
-    def getSettingsFromEnvironment(self):
-        """gets the data from environment
-        """
-        
-        if self._environment.name is not None and self._environment.name != '':
-            self.fileName, self.path = self._environment.get_last_version()
-            
-            # update the interface
-            self.fillFieldsFromFileInfo()
-    
-    # SAVE & OPEN & IMPORT & REFERENCE ACTIONS FOR ENVIRONMENTS
-    def checkOutputAsset(self, assetObject):
-        """check if the asset is a valid asset
-        """
-        return assetObject.isValidAsset
-    
-    def checkOutputFileVersion(self, assetObject):
-        """checks if the asset is set to latest version for its own kind
-        """
-        
-        verStatus = False
-        
-        # check for the new version
-        if not assetObject.isNewVersion():
-            
-            # ask permission to update the fields automatically
-            answer = QtGui.QMessageBox.question(
-                self,
-                "Version Error",
-                "it is not the latest version\nshould I increase the "
-                "version number?",
-                QtGui.QMessageBox.Yes,
-                QtGui.QMessageBox.No
-            )
-            
-            if answer == QtGui.QMessageBox.Yes:
-                assetObject.setVersionToNextAvailable()
-                
-                self.setVersionNumberField( assetObject.versionNumber )
-                
-                verStatus = True
-        else:
-            verStatus = True
-        
-        return verStatus
-    
-    def checkOutputFileRevision(self, assetObject):
-        """checks if the asset is set to latest revision for its own kind
-        """
-        
-        revStatus = False
-        
-        # check for latest revision
-        if not assetObject.isLatestRevision():
-            # ask permission to update the fields automatically
-            answer = QtGui.QMessageBox.question(
-                self,
-                "Revision Error",
-                "it is not the latest revision\nshould I increase the "
-                "revision number?",
-                QtGui.QMessageBox.Yes,
-                QtGui.QMessageBox.No
-            )
-            
-            if answer == QtGui.QMessageBox.Yes:
-                assetObject.setRevisionToNextAvailable()
-                
-                self.setRevisionNumberField( assetObject.revisionNumber )
-                
-                revStatus = True
-        else:
-            revStatus = True
-        
-        return revStatus
-    
-    def checkOutputFileOverwrite(self, assetObject):
-        """checks if the assetObject already exists, so user tries to overwrite
-        """
-        
-        overwriteStatus = False
-        
-        # check for overwrites
-        if assetObject.exists:
-            answer = QtGui.QMessageBox.question(
-                self,
-                'File Error',
-                'overwrite?',
-                QtGui.QMessageBox.Yes,
-                QtGui.QMessageBox.No
-            )
-            
-            if answer == QtGui.QMessageBox.Yes:
-                overwriteStatus = True
-        else:
-            overwriteStatus = True
-        
-        return overwriteStatus
-    
-    def saveAsset(self):
-        """prepares the data and sends the asset object to the function
-        specially written for the host environment to save the asset file
-        """
-        
-        # get the asset object
-        self._createAssetObjectFromSaveFields()
-        self._environment.asset = self._asset
-        
-        
-        if self._asset is None:
-            return
-        
-        # check the file conditions
-        assetStatus = self.checkOutputAsset( self._asset )
-        verStatus = self.checkOutputFileVersion( self._asset )
-        revStatus = self.checkOutputFileRevision( self._asset )
-        overwriteStatus = self.checkOutputFileOverwrite( self._asset )
-        
-        if assetStatus and verStatus and revStatus and overwriteStatus:
-            
-            # before saving check the frame range
-            # -----------------------------------------------------------------
-            # check the frame range
-            # -----------------------------------------------------------------
-            # check the range if and only if the asset is shot dependent
-            if self._asset.isShotDependent:
-                # get the frame range from environment
-                returnStat = self.adjustFrameRange()
-                if returnStat == -1:
-                    return
-            # -----------------------------------------------------------------
-            
-            
-            # check the timeUnit
-            self.adjustTimeUnit()
-            
-            #everything is ok now save in the host application
-#            print "self._environment: ", self._environment
-            envStatus = self._environment.save()
-            
-            # if everything worked fine close the interface
-            if envStatus:
-                # set the last user variable
-                self._repo.last_user = self._asset.userInitials
-                
-                #print info
-                if self._environment.name == 'MAYA':
-                    self.printInfo( self._asset,  "saved" )
-                
-                self.close()
-    
-    def exportAsset(self):
-        """prepares the data and sends the asset object to the function
-        specially written for the host environment to open the asset file
-        """
-        
-        # get the asset object
-        self._createAssetObjectFromSaveFields()
-        
-        if self._asset is None:
-            return
-        
-        # check the file conditions
-        assetStatus = self.checkOutputAsset( self._asset )
-        verStatus = self.checkOutputFileVersion( self._asset )
-        revStatus = self.checkOutputFileRevision( self._asset )
-        overwriteStatus = self.checkOutputFileOverwrite( self._asset )
-        
-        envStatus = False
-        
-        if assetStatus and verStatus and revStatus and overwriteStatus:
-            # everything is ok now save in the host application
-            envStatus = self._environment.export(self._asset)
-            
-            # if everything worked fine close the interface
-            if envStatus:
-                # do not set the last user variable
-                
-                # inform the user for successful operation
-                
-                QtGui.QMessageBox.information(
-                    self,
-                    'Asset Export',
-                    'Asset :\n\n'+ self._asset.fileName + \
-                        '\n\nis exported successfully',
-                    QtGui.QMessageBox.Ok
-                )
-                
-                self.close()
-    
-    def openAsset(self):
-        """prepares the data and sends the asset object to the function
-        specially written for the host environment to open the asset file
-        """
-        
-        # get the asset object
-        self._createAssetObjectFromOpenFields()
-        self._environment.asset = self._asset
-        
-        # check the file existence
-        exists = os.path.exists( self._asset.fullPath )
-        
-        envStatus = False
-        
-        # open the asset in the environment
-        if exists:
-            if self._environment.name == 'MAYA':
-                
-                # the list that holds the assets those needs to be updated
-                toUpdateList = []
-                
-                try:
-                    envStatus, toUpdateList = self._environment.open_()
-                except RuntimeError:
-                    answer = QtGui.QMessageBox.question(
-                        self,
-                        'RuntimeError',
-                        "There are <b>unsaved changes</b> in the current "
-                        "scene<br><br>Do you really want to open the file?",
-                        QtGui.QMessageBox.Yes,
-                        QtGui.QMessageBox.No
-                    )
-                    
-                    envStatus = False
-                    
-                    if answer== QtGui.QMessageBox.Yes:
-                        envStatus, toUpdateList = self._environment.open_( True )
-                    else:
-                        return
-                
-                # check the toUpdateList to update old assets
-                if len(toUpdateList):
-                    # invoke the assetUpdater for this scene
-                    assetUpdaterMainDialog = version_updater.MainDialog( self._environment.name, self )
-                    assetUpdaterMainDialog.exec_()
-                    
-                # load references (Maya Only - for now)
-                self._environment.load_references()
-                
-            elif self._environment.name == 'NUKE':
-                envStatus = self._environment.open_()
-            
-            elif self._environment.name == 'HOUDINI':
-                try:
-                    envStatus = self._environment.open_()
-                except RuntimeError:
-                    answer = QtGui.QMessageBox.question(
-                        self,
-                        'RuntimeError',
-                        "There are unsaved changes in the current "
-                        "scene\n\nDo you really want to open the file?",
-                        QtGui.QMessageBox.Yes,
-                        QtGui.QMessageBox.No
-                    )
-                    
-                    if answer== QtGui.QMessageBox.Yes:
-                        envStatus = self._environment.open_( True )
-            
-            if envStatus:
-                # -----------------------------------------------------------------
-                # check the frame range
-                # -----------------------------------------------------------------
-                # check the range if and only if the asset is shot dependent
-                
-                if self._asset.isShotDependent and self._environment.name != 'NUKE':
-                    # get the frame range from environment
-                    self.adjustFrameRange()
-                # -----------------------------------------------------------------
-                self.close()
-        
-        else:
-            # warn the user for non existing asset files
-            answer = QtGui.QMessageBox.question(
-                self,
-                'File Error',
-                self._asset.fullPath + "\n\nAsset doesn't exist !!!",
-                QtGui.QMessageBox.Ok
-            )
-    
-    def importAsset(self):
-        """prepares the data and sends the asset object to the function
-        specially written for the host environment to import the asset file
-        """
-        
-        # get the asset object
-        self._createAssetObjectFromOpenFields()
-        
-        # check the file existence
-        exists = os.path.exists(self._asset.fullPath)
-        
-        envStatus = False
-        
-        # open the asset in the environment
-        if exists:
-            envStatus = self._environment.import_(self._asset)
-            
-            if envStatus:
-                #self.close()
-                QtGui.QMessageBox.information(
-                    self,
-                    'Asset Import',
-                    'Asset :\n\n'+ self._asset.fileName + \
-                       '\n\nis imported successfully',
-                    QtGui.QMessageBox.Ok
-                )
-        
-        else:
-            # warn the user for non existing asset files
-            answer = QtGui.QMessageBox.question(
-                self,
-                'File Error',
-                self._asset.fullPath + "\n\nAsset doesn't exist !!!",
-                QtGui.QMessageBox.Ok
-            )
-    
-    def referenceAsset(self):
-        """prepares the data and sends the asset object to the function
-        specially written for the host environment to reference the asset file
-        
-        beware that not all environments supports this action
-        """
-        
-        #print self._environment._asset
-        
-        # get the asset object
-        #self._createAssetObjectFromOpenFields()
-        referenced_asset = self._getAssetObjectFromOpenFields()
-        
-        # check the file existence
-        #exists = os.path.exists(self._asset.fullpath)
-        exists = os.path.exists(referenced_asset.fullPath)
-        
-        envStatus = False
-        
-        # open the asset in the environment
-        if exists:
-            envStatus = self._environment.reference(referenced_asset)
-            
-            if envStatus:
-                QtGui.QMessageBox.information(
-                    self,
-                    'Asset Reference',
-                    'Asset :\n\n'+ self._asset.fileName + \
-                          '\n\nis referenced successfully',
-                    QtGui.QMessageBox.Ok
-                )
-        
-        else:
-            # warn the user for non existing asset files
-            answer = QtGui.QMessageBox.question(
-                self,
-                'File Error',
-                self._asset.fullPath + "\n\nAsset doesn't exist !!!",
-                QtGui.QMessageBox.Ok
-            )
-    
-    def printInfo(self, assetObject, actionName):
-        """prints info about action
-        """
-        
-        print "-----------------------------------"
-        print "AssetManager"
-        print assetObject.fileName
-        print actionName + " successfully"
-    
-    def adjustFrameRange(self):
-        """adjusts the frame range to match the shot settings
-        
-        returns
-        -1 : Cancel
-         0 : No
-         1 : Yes
-        """
-        
-        returnStat = 1
-        # get the frame range from environment
-        envStart, envEnd = self._environment.getFrameRange()
-        
-        # get the frame range from the sequence settings
-        seq = self._asset.sequence
-        #assert(isinstance(seq, Sequence))
-        shot = seq.getShot( self._asset.shotNumber )
-        
-        if shot is not None and envStart is not None and envEnd is not None:
-            shotStart = shot.startFrame
-            shotEnd = shot.endFrame
-            
-            if envStart != shotStart or envEnd != shotEnd:
-                answer = QtGui.QMessageBox.question(
-                    self, 'FrameRange Error',
-                    
-                    "The current frame range is:<br><b>" + \
-                    str(envStart) + "-" + str(envEnd) + \
-                    "</b><br><br>The frame range of shot <b>" + shot.name + \
-                    "</b> is:<br><b>" + str(shotStart) + "-" + str(shotEnd) + \
-                    "</b><br><br>should your frame range be adjusted?",
-                    
-                    QtGui.QMessageBox.Yes,
-                    QtGui.QMessageBox.No,
-                    QtGui.QMessageBox.Cancel
-                )
-                
-                if answer == QtGui.QMessageBox.Yes:
-                    self._environment.setFrameRange( shotStart, shotEnd )
-                    return 1
-                if answer == QtGui.QMessageBox.Cancel:
-                    # do nothing
-                    return -1
-            else: # set it in case the render frames are wrong
-                self._environment.setFrameRange( shotStart, shotEnd )
-                return 1
-    
-    def adjustTimeUnit(self):
-        """adjusts the timeUnit to match the settings
-        """
-        
-        # get the timeUnit of the environment
-        timeUnit = self._environment.getTimeUnit()
-        
-        # get the timeUnit of the sequence
-        seq = self._asset.sequence
-        
-        assert(isinstance(seq, Sequence))
-        
-        seqTimeUnit = seq.timeUnit
-        
-        if seq.timeUnit != timeUnit:
-            answer = QtGui.QMessageBox.question(
-                self, 'TimeUnit Error',
-                "The current time unit is:<br><b>" + timeUnit + \
-                "</b><br><br>The time unit of the sequence is :<br><b>" + \
-                seqTimeUnit + "</b><br><br>your time unit will be adjusted!",
-                QtGui.QMessageBox.Ok
-            )
-            
-            # adjust the time unit
-            self._environment.setTimeUnit( seqTimeUnit )
-
-class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
     """The main asset version creation dialog for the system.
     
     This is the main interface that the users of the oyProjectManager will use
@@ -1670,7 +105,7 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         logger.debug("initializing the interface")
         
 #        super(QtGui.QDialog, self).__init__(parent)
-        super(MainDialog_New, self).__init__(parent)
+        super(MainDialog, self).__init__(parent)
         self.setupUi(self)
         
         self.config = config.Config()
@@ -1688,20 +123,19 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         self.users_comboBox.users = []
         self.projects_comboBox.projects = []
         self.sequences_comboBox.sequences = []
+        self.assets_listWidget.assets = []
         self.shots_listWidget.shots = []
         self.input_dialog = None
         self.previous_versions_tableWidget.versions = []
         
-        # set previous_version_tableWidget.labels
+        # set previous_versions_tableWidget.labels
         self.previous_versions_tableWidget.labels = [
-#            "Name",
-#            "Type",
-#            "Take",
             "Version",
             "User",
-            "Note",
             "File Size",
-            "Path"
+            "Date",
+            "Note",
+            #"Path"
         ]
         
         # setup signals
@@ -1779,16 +213,16 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         
         # types_comboBox
         QtCore.QObject.connect(
-            self.version_types_comboBox,
-            QtCore.SIGNAL("currentIndexChanged(int)"),
-            self.version_types_comboBox_changed
+            self.version_types_listWidget,
+            QtCore.SIGNAL("currentTextChanged(QString)"),
+            self.version_types_listWidget_changed
         )
         
         # take_comboBox
         QtCore.QObject.connect(
-            self.takes_comboBox,
-            QtCore.SIGNAL("currentIndexChanged(int)"),
-            self.takes_comboBox_changed
+            self.takes_listWidget,
+            QtCore.SIGNAL("currentTextChanged(QString)"),
+            self.takes_listWidget_changed
         )
         
         # add_type_toolButton
@@ -1822,7 +256,7 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
             QtCore.SIGNAL("clicked()"),
             self.add_take_toolButton_clicked
         )
-
+        
         # export_as
         QtCore.QObject.connect(
             self.export_as_pushButton,
@@ -1865,7 +299,35 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
             QtCore.SIGNAL("clicked()"),
             self.import_pushButton_clicked
         )
-
+        
+        # show_only_published_checkBox
+        QtCore.QObject.connect(
+            self.show_published_only_checkBox,
+            QtCore.SIGNAL("stateChanged(int)"),
+            self.update_previous_versions_tableWidget
+        )
+        
+        # show_only_published_checkBox
+        QtCore.QObject.connect(
+            self.version_count_spinBox,
+            QtCore.SIGNAL("valueChanged(int)"),
+            self.update_previous_versions_tableWidget
+        )
+        
+        # shot_info_update_pushButton 
+        QtCore.QObject.connect(
+            self.shot_info_update_pushButton,
+            QtCore.SIGNAL("clicked()"),
+            self.shot_info_update_pushButton_clicked
+        )
+        
+        # upload_thumbnail_pushButton
+        QtCore.QObject.connect(
+            self.upload_thumbnail_pushButton,
+            QtCore.SIGNAL("clicked()"),
+            self.upload_thumbnail_pushButton_clicked
+        )
+        
         logger.debug("finished setting up interface signals")
     
     def _show_assets_listWidget_context_menu(self, position):
@@ -1934,33 +396,50 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         
         logger.debug("started setting up interface defaults")
         
+        # clear the thumbnail area
+        self.clear_thumbnail()
+        
         # fill the projects
-        projects = db.query(Project).all()
+        projects = db.query(Project)\
+            .filter(Project.active==True)\
+            .order_by(Project.name)\
+            .all()
+        
         self.projects_comboBox.addItems(
             map(lambda x: x.name, projects)
         )
         self.projects_comboBox.projects = projects
         
         # fill the users
-#        self.users_comboBox.addItems([user.name for user in self.config.users])
         users = db.query(User).all()
         self.users_comboBox.users = users
         self.users_comboBox.addItems(map(lambda x:x.name, users))
         
         # set the default user
         last_user_id = conf.last_user_id
+        if last_user_id:
+            logger.debug("last_user_id: %i" % last_user_id)
+        else:
+            logger.debug("no last user is set before")
+        
         last_user = None
         if last_user_id is not None:
             last_user = db.query(User).filter(User.id==last_user_id).first()
         
+        logger.debug("last_user: %s" % last_user)
+        
         if last_user is not None:
             # select the user from the users_comboBox
             index = self.users_comboBox.findText(last_user.name)
+            logger.debug("last_user index in users_comboBox: %i" % index)
             if index != -1:
                 self.users_comboBox.setCurrentIndex(index)
         
-        # add "Main" by default to the takes_comboBox
-        self.takes_comboBox.addItem(conf.default_take_name)
+        # add "Main" by default to the takes_listWidget
+        self.takes_listWidget.addItem(conf.default_take_name)
+        # select it
+        item = self.takes_listWidget.item(0)
+        self.takes_listWidget.setCurrentItem(item)
         
         # run the project changed item for the first time
         self.project_changed()
@@ -1986,7 +465,7 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         logger.debug("restoring ui with the given version: %s", version)
         
         # quit if version is None
-        if version is None:
+        if version is None or not version.project.active:
             return
         
         # set the project
@@ -2020,21 +499,26 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
                 QtCore.Qt.MatchExactly
             )
             self.shots_listWidget.setCurrentItem(items[0])
-            
+        
         
         # version_type name
         type_name = version.type.name
-        index = self.version_types_comboBox.findText(type_name)
-        self.version_types_comboBox.setCurrentIndex(index)
+        items = self.version_types_listWidget.findItems(
+            type_name,
+            QtCore.Qt.MatchExactly
+        )
+        if not items:
+            return
+        
+        self.version_types_listWidget.setCurrentItem(items[0])
         
         # take_name
         take_name = version.take_name
-        index = self.takes_comboBox.findText(take_name)
-        self.takes_comboBox.setCurrentIndex(index)
-        
-        
-        
-        
+        items = self.takes_listWidget.findItems(
+            take_name,
+            QtCore.Qt.MatchExactly
+        )
+        self.takes_listWidget.setCurrentItem(items[0])
     
     def project_changed(self):
         """updates the assets list_widget and sequences_comboBox for the 
@@ -2053,6 +537,9 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         
         proj = self.get_current_project()
         
+        # clear the thumbnail area
+        self.clear_thumbnail()
+        
         # if assets is the current tab
         if index == 0:
             logger.debug("tabWidget index changed to asset")
@@ -2061,6 +548,9 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
             
             # get all the assets of the project
             assets = db.query(Asset).filter(Asset.project==proj).all()
+            
+            # add the assets to the assets list
+            self.assets_listWidget.assets = assets
             
             # add their names to the list
             self.assets_listWidget.clear()
@@ -2083,11 +573,14 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
 #                self.asset_description_edit_pushButton.setEnabled(False)
                 
                 # clear the versions comboBox
-                self.version_types_comboBox.clear()
+                self.version_types_listWidget.clear()
                 
                 # set the take to default
-                self.takes_comboBox.clear()
-                self.takes_comboBox.addItem(conf.default_take_name)
+                self.takes_listWidget.clear()
+                self.takes_listWidget.addItem(conf.default_take_name)
+                item = self.takes_listWidget.item(0)
+                self.takes_listWidget.setCurrentItem(item)
+                
         
         elif self.tabWidget.currentIndex() == 1:
             # TODO: don't update if the project is not changed from the last one
@@ -2108,12 +601,17 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
                 self.sequences_comboBox_changed(0)
             else:
                 # there is no sequence
+                # clear the shots_listWidget
+                self.shots_listWidget.clear()
+                
                 # clear the version comboBox
-                self.version_types_comboBox.clear()
+                self.version_types_listWidget.clear()
                 
                 # set the take to default
-                self.takes_comboBox.clear()
-                self.takes_comboBox.addItem(conf.default_take_name)
+                self.takes_listWidget.clear()
+                self.takes_listWidget.addItem(conf.default_take_name)
+                item = self.takes_listWidget.item(0)
+                self.takes_listWidget.setCurrentItem(item)
     
     def sequences_comboBox_changed(self, index):
         """called when the sequences_comboBox index has changed
@@ -2140,6 +638,9 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         # set the list to the first shot
         list_item = self.shots_listWidget.item(0)
         
+        # clear the thumbnail area
+        self.clear_thumbnail()
+        
         if list_item is not None:
             self.shots_listWidget.setCurrentItem(list_item)
             
@@ -2157,11 +658,12 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         
         proj = self.get_current_project()
         
-        asset = \
-            db.query(Asset).\
-            filter(Asset.project==proj).\
-            filter_by(name=asset_name).\
-            first()
+        #asset = \
+        #    db.query(Asset).\
+        #    filter(Asset.project==proj).\
+        #    filter_by(name=asset_name).\
+        #    first()
+        asset = self.get_versionable()
         
         if asset is None:
             return
@@ -2197,21 +699,30 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
             )
         
         # add the types to the version types list
-        self.version_types_comboBox.clear()
-        self.version_types_comboBox.addItems(types)
+        self.version_types_listWidget.clear()
+        self.version_types_listWidget.addItems(types)
         
         # select the first one
-        self.version_types_comboBox.setCurrentIndex(0)
-    
+        item = self.version_types_listWidget.item(0)
+        self.version_types_listWidget.setCurrentItem(item)
+        
+        # update thumbnail
+        self.update_thumbnail()
+
+    def get_current_shot(self):
+        """returns the current selected shot in the interface
+        """
+        # get the shot from the index
+        index = self.shots_listWidget.currentIndex().row()
+        shot = self.shots_listWidget.shots[index]
+        return shot
+
     def shot_changed(self, shot_name):
         """updates the shot related fields with the current shot information
         """
         
         proj = self.get_current_project()
-        
-        # get the shot from the index
-        index = self.shots_listWidget.currentIndex().row()
-        shot = self.shots_listWidget.shots[index]
+        shot = self.get_current_shot()
         
 #        # set the description
 #        if shot.description is not None:
@@ -2220,24 +731,64 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
 #            self.shot_description_textEdit.setText("")
         
         # update the version data
+        # frame info
+        self.start_frame_spinBox.setValue(shot.start_frame)
+        self.end_frame_spinBox.setValue(shot.end_frame)
+        self.handle_at_start_spinBox.setValue(shot.handle_at_start)
+        self.handle_at_end_spinBox.setValue(shot.handle_at_end)
+        
         # Types
-        # get all the types for this asset
-        types = map(
-            lambda x: x[0],
-            db.query(distinct(VersionType.name)).
-            join(Version).
-            filter(Version.version_of==shot).
-            all()
-        )
+        # get all the types for this shot
+        if self.environment is None:
+            types = map(
+                lambda x: x[0],
+                db.query(distinct(VersionType.name)).
+                join(Version).
+                filter(Version.version_of==shot).
+                all()
+            )
+        else:
+            types = map(
+                lambda x: x[0],
+                db.query(distinct(VersionType.name))
+                .join(VersionTypeEnvironments)
+                .join(Version)
+                .filter(VersionTypeEnvironments.environment_name==self.environment.name)
+                .filter(Version.version_of==shot)
+                .all()
+            )
         
         # add the types to the version types list
-        self.version_types_comboBox.clear()
-        self.version_types_comboBox.addItems(types)
+        self.version_types_listWidget.clear()
+        self.version_types_listWidget.addItems(types)
 
         # select the first one
-        self.version_types_comboBox.setCurrentIndex(0)
+        item = self.version_types_listWidget.item(0)
+        self.version_types_listWidget.setCurrentItem(item)
+#        setCurrentRow(0)
+        
+        # update thumbnail
+        self.update_thumbnail()
     
-    def version_types_comboBox_changed(self, index):
+    def shot_info_update_pushButton_clicked(self):
+        """runs when the shot_info_update_pushButton is clicked
+        """
+        
+        shot = self.get_current_shot()
+        
+        # get the info
+        start_frame = self.start_frame_spinBox.value()
+        end_frame = self.end_frame_spinBox.value()
+        handle_at_start = self.handle_at_start_spinBox.value()
+        handle_at_end = self.handle_at_end_spinBox.value()
+        
+        # now update the shot
+        shot.start_frame = start_frame
+        shot.end_frame = end_frame
+        shot.handle_at_start = handle_at_start
+        shot.handle_at_end = handle_at_end
+    
+    def version_types_listWidget_changed(self, index):
         """runs when the asset version types comboBox has changed
         """
         
@@ -2247,21 +798,11 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         versionable = None
         if self.tabWidget.currentIndex() == 0:
             
-            try:
-                asset_name = self.assets_listWidget.currentItem().text()
-            except AttributeError:
-                asset_name = None
+            index = self.assets_listWidget.currentIndex().row()
+            versionable = self.assets_listWidget.assets[index]
             
-            versionable = \
-                db.query(Asset)\
-                .filter(Asset.project==proj)\
-                .filter_by(name=asset_name)\
-                .first()
+            logger.debug("updating take list for asset: %s" % versionable.name)
             
-            if asset_name is not None:
-                logger.debug("updating take list for asset: %s" % versionable.name)
-            else:
-                logger.debug("updating take list for no asset")
         else:
             index = self.shots_listWidget.currentIndex().row()
             versionable = self.shots_listWidget.shots[index]
@@ -2269,7 +810,10 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
             logger.debug("updating take list for shot: %s" % versionable.code)
         
         # version type name
-        version_type_name = self.version_types_comboBox.currentText()
+        version_type_name = ""
+        item = self.version_types_listWidget.currentItem()
+        if item:
+            version_type_name = item.text()
         
         logger.debug("version_type_name: %s" % version_type_name)
         
@@ -2284,40 +828,42 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
             .all()
         )
         
-        self.takes_comboBox.clear()
+        self.takes_listWidget.clear()
+        
+        logger.debug("len(takes) from db: %s" % len(takes))
         
         if len(takes) == 0:
             # append the default take
-            takes.append(conf.default_take_name)
+            logger.debug("appending the default take name")
+            self.takes_listWidget.addItem(conf.default_take_name)
+        else:
+            logger.debug("adding the takes from db")
+            self.takes_listWidget.addItems(takes)
         
-        self.takes_comboBox.addItems(takes)
-        self.takes_comboBox.setCurrentIndex(0)
+        logger.debug("setting the first element selected")
+        item = self.takes_listWidget.item(0)
+        self.takes_listWidget.setCurrentItem(item)
     
-    def takes_comboBox_changed(self, index):
-        """runs when the takes_comboBox has changed
+    def takes_listWidget_changed(self, index):
+        """runs when the takes_listWidget has changed
+        """
+        
+        # just update the previous_versions_tableWidget
+        self.update_previous_versions_tableWidget()
+    
+    def update_previous_versions_tableWidget(self):
+        """updates the previous_versions_tableWidget
         """
         
         proj = self.get_current_project()
         
         versionable = None
         if self.tabWidget.currentIndex() == 0:
-            
-            try:
-                asset_name = self.assets_listWidget.currentItem().text()
-            except AttributeError:
-                # no asset
-                # just return
-                asset_name = None
-            
-            versionable = db.query(Asset)\
-                .filter(Asset.project==proj)\
-                .filter(Asset.name==asset_name)\
-                .first()
-            
-            if versionable is not None:
-                logger.debug("updating take list for asset: %s" % versionable.name)
-            else:
-                logger.debug("updating take list for no asset")
+            index = self.assets_listWidget.currentIndex().row()
+            if index != -1: 
+                versionable = self.assets_listWidget.assets[index]
+                logger.debug("updating take list for asset: %s" % 
+                             versionable.name)
         else:
             index = self.shots_listWidget.currentIndex().row()
             versionable = self.shots_listWidget.shots[index]
@@ -2325,30 +871,64 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
             logger.debug("updating take list for shot: %s" % versionable.code)
         
         # version type name
-        version_type_name = self.version_types_comboBox.currentText()
+        version_type_name = ""
+        item = self.version_types_listWidget.currentItem()
+        if item:
+            version_type_name = item.text()
         
         logger.debug("version_type_name: %s" % version_type_name)
         
         # take name
-        take_name = self.takes_comboBox.currentText()
+        take_name = ""
+        item = self.takes_listWidget.currentItem()
+        if item:
+            take_name = item.text()
         
         logger.debug("take_name: %s" % take_name)
         
         # query the Versions of this type and take
-        versions = db.query(Version).join(VersionType)\
+        query = db.query(Version).join(VersionType)\
             .filter(VersionType.name==version_type_name)\
             .filter(Version.version_of==versionable)\
-            .filter(Version.take_name==take_name)\
-            .order_by(Version.version_number)\
-            .all()
+            .filter(Version.take_name==take_name)
         
-        #        print versions
+        # get the published only
+        if self.show_published_only_checkBox.isChecked():
+            query = query.filter(Version.is_published==True)
+        
+        # show how many
+        count = self.version_count_spinBox.value()
+        
+        versions = query.order_by(Version.version_number.desc())\
+            .limit(count).all()
+        
+#        versions =
+        versions.reverse()
+        
+        # set the versions cache by adding them to the widget
+        self.previous_versions_tableWidget.versions = versions
+        
         self.previous_versions_tableWidget.clear()
         self.previous_versions_tableWidget.setRowCount(len(versions))
         
         self.previous_versions_tableWidget.setHorizontalHeaderLabels(
             self.previous_versions_tableWidget.labels
         )
+        
+        
+        def set_font(item):
+            """sets the font for the given item
+            
+            :param item: the a QTableWidgetItem
+            """
+            my_font = item.font()
+            my_font.setBold(True)
+            
+            item.setFont(my_font)
+           
+            foreground = item.foreground()
+            foreground.setColor(QtGui.QColor(0, 192, 0))
+            item.setForeground(foreground)
         
         # update the previous versions list
         for i, vers in enumerate(versions):
@@ -2378,12 +958,19 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         #            item.setTextAlignment(0x0001 | 0x0080)
         #            self.previous_versions_tableWidget.setItem(i, 2, item)            
         #            # ------------------------------------
-        
+            
+            is_published = vers.is_published
+            
             # ------------------------------------
             # version_number
             item = QtGui.QTableWidgetItem(str(vers.version_number))
             # align to center and vertical center
             item.setTextAlignment(0x0004 | 0x0080)
+            
+            if is_published:
+                set_font(item)
+            
+#            item.setFont(font_weight)
             self.previous_versions_tableWidget.setItem(i, 0, item)
             # ------------------------------------
         
@@ -2392,32 +979,90 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
             item = QtGui.QTableWidgetItem(vers.created_by.name)
             # align to left and vertical center
             item.setTextAlignment(0x0001 | 0x0080)
+
+            if is_published:
+                set_font(item)
+            
             self.previous_versions_tableWidget.setItem(i, 1, item)
             # ------------------------------------
         
+            # ------------------------------------
+            # filesize
+            
+            # get the file size
+            #file_size_format = "%.2f MB"
+            file_size = -1
+            if os.path.exists(vers.full_path):
+                file_size = float(os.path.getsize(vers.full_path))/1024/1024
+
+            item = QtGui.QTableWidgetItem(conf.file_size_format % file_size)
+            # align to left and vertical center
+            item.setTextAlignment(0x0001 | 0x0080)
+
+            if is_published:
+                set_font(item)
+            
+            self.previous_versions_tableWidget.setItem(i, 2, item)
+            # ------------------------------------
+            
+            # ------------------------------------
+            # date
+            
+            # get the file date
+
+            file_date = datetime.datetime.today()
+            if os.path.exists(vers.full_path):
+                file_date =  datetime.datetime.fromtimestamp(
+                    os.path.getmtime(vers.full_path)
+                )
+            item = QtGui.QTableWidgetItem(
+                file_date.strftime(conf.time_format)
+            )
+            
+            # align to left and vertical center
+            item.setTextAlignment(0x0001 | 0x0080)
+            
+            self.previous_versions_tableWidget.setItem(i, 3, item)
+            # ------------------------------------
+                        
             # ------------------------------------
             # note
             item = QtGui.QTableWidgetItem(vers.note)
             # align to left and vertical center
             item.setTextAlignment(0x0001 | 0x0080)
-            self.previous_versions_tableWidget.setItem(i, 2, item)
-            # ------------------------------------
-        
-            # ------------------------------------
-            # filesize
-            item = QtGui.QTableWidgetItem("")
-            # align to left and vertical center
-            item.setTextAlignment(0x0001 | 0x0080)
-            self.previous_versions_tableWidget.setItem(i, 3, item)
-            # ------------------------------------
-        
-            # ------------------------------------
-            # full_path
-            item = QtGui.QTableWidgetItem(vers.full_path)
-            # align to center and vertical center
-            item.setTextAlignment(0x0001 | 0x0080)
+
+            if is_published:
+                set_font(item)
+            
             self.previous_versions_tableWidget.setItem(i, 4, item)
             # ------------------------------------
+
+            ## ------------------------------------
+            ## full_path
+            #item = QtGui.QTableWidgetItem(vers.full_path)
+            ## align to center and vertical center
+            #item.setTextAlignment(0x0001 | 0x0080)
+
+            #if is_published:
+            #    set_font(item)
+            #
+            #self.previous_versions_tableWidget.setItem(i, 4, item)
+            ## ------------------------------------
+        
+#        # for test add an pixmap
+#        test_label = ImageWidget(
+#            "/home/eoyilmaz/test.jpg", self.previous_versions_tableWidget #.item(count, 0)
+#        )
+#        
+#        test_label.setText("Test")
+#        
+#        self.previous_versions_tableWidget.model()
+#        
+#        self.previous_versions_tableWidget.setCellWidget(
+#            count, 0, test_label
+#        )
+        
+ 
         
         # resize the first column
         self.previous_versions_tableWidget.resizeColumnToContents(0)
@@ -2428,173 +1073,170 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
 #        self.previous_versions_tableWidget.resizeColumnToContents(5)
 #        self.previous_versions_tableWidget.resizeColumnToContents(6)
 #        self.previous_versions_tableWidget.resizeColumnToContents(7)
-        
-        # add the versions to the widget
-        self.previous_versions_tableWidget.versions = versions
     
-    def asset_description_edit_pushButton_clicked(self):
-        """checks the asset_description_edit_pushButton
-        """
-
-        button = self.asset_description_edit_pushButton
-        text_field = self.asset_description_textEdit
-        
-        # check or uncheck
-        if button.text() != u"Done":
-            # change the text to "Done"
-            button.setText(u"Done")
-            
-            # make the text field read-write
-            text_field.setReadOnly(False)
-            
-            # to discourage edits
-            # disable the assets_listWidget
-            self.assets_listWidget.setEnabled(False)
-            
-            # and the projects_comboBox
-            self.projects_comboBox.setEnabled(False)
-            
-            # and the create_asset_pushButton
-            self.create_asset_pushButton.setEnabled(False)
-            
-            # and the shots_tab
-            self.shots_tab.setEnabled(False)
-            
-            # and the new_version_groupBox
-            self.new_version_groupBox.setEnabled(False)
-            
-            # and the previous_versions_groupBox
-            self.previous_versions_groupBox.setEnabled(False)
-            
-        else:
-            asset_name = self.assets_listWidget.currentItem().text()
-            
-            # change the text to "Edit"
-            button.setText("Edit")
-            button.setStyleSheet("")
-            text_field.setReadOnly(True)
-            
-            proj = self.get_current_project()
-            asset = \
-                db.query(Asset)\
-                .filter(Asset.project==proj)\
-                .filter_by(name=asset_name)\
-                .first()
-            
-            # update the asset description
-            logger.debug("asset description of %s changed to %s" % (
-                    asset,
-                    self.asset_description_textEdit.toPlainText()
-                )
-            )
-            
-            # only issue an update if the description has changed
-            new_description = self.asset_description_textEdit.toPlainText()
-            
-            if asset.description != new_description:
-                asset.description = new_description
-                asset.save()
-
-            # re-enable assets_listWidget
-            self.assets_listWidget.setEnabled(True)
-
-            # and the projects_comboBox
-            self.projects_comboBox.setEnabled(True)
-
-            # and the create_asset_pushButton
-            self.create_asset_pushButton.setEnabled(True)
-
-            # and the shots_tab
-            self.shots_tab.setEnabled(True)
-            
-            # and the new_version_groupBox
-            self.new_version_groupBox.setEnabled(True)
-            
-            # and the previous_versions_groupBox
-            self.previous_versions_groupBox.setEnabled(True)
+#    def asset_description_edit_pushButton_clicked(self):
+#        """checks the asset_description_edit_pushButton
+#        """
+#
+#        button = self.asset_description_edit_pushButton
+#        text_field = self.asset_description_textEdit
+#        
+#        # check or uncheck
+#        if button.text() != u"Done":
+#            # change the text to "Done"
+#            button.setText(u"Done")
+#            
+#            # make the text field read-write
+#            text_field.setReadOnly(False)
+#            
+#            # to discourage edits
+#            # disable the assets_listWidget
+#            self.assets_listWidget.setEnabled(False)
+#            
+#            # and the projects_comboBox
+#            self.projects_comboBox.setEnabled(False)
+#            
+#            # and the create_asset_pushButton
+#            self.create_asset_pushButton.setEnabled(False)
+#            
+#            # and the shots_tab
+#            self.shots_tab.setEnabled(False)
+#            
+#            # and the new_version_groupBox
+#            self.new_version_groupBox.setEnabled(False)
+#            
+#            # and the previous_versions_groupBox
+#            self.previous_versions_groupBox.setEnabled(False)
+#            
+#        else:
+#            asset_name = self.assets_listWidget.currentItem().text()
+#            
+#            # change the text to "Edit"
+#            button.setText("Edit")
+#            button.setStyleSheet("")
+#            text_field.setReadOnly(True)
+#            
+#            proj = self.get_current_project()
+#            asset = \
+#                db.query(Asset)\
+#                .filter(Asset.project==proj)\
+#                .filter_by(name=asset_name)\
+#                .first()
+#            
+#            # update the asset description
+#            logger.debug("asset description of %s changed to %s" % (
+#                    asset,
+#                    self.asset_description_textEdit.toPlainText()
+#                )
+#            )
+#            
+#            # only issue an update if the description has changed
+#            new_description = self.asset_description_textEdit.toPlainText()
+#            
+#            if asset.description != new_description:
+#                asset.description = new_description
+#                asset.save()
+#
+#            # re-enable assets_listWidget
+#            self.assets_listWidget.setEnabled(True)
+#
+#            # and the projects_comboBox
+#            self.projects_comboBox.setEnabled(True)
+#
+#            # and the create_asset_pushButton
+#            self.create_asset_pushButton.setEnabled(True)
+#
+#            # and the shots_tab
+#            self.shots_tab.setEnabled(True)
+#            
+#            # and the new_version_groupBox
+#            self.new_version_groupBox.setEnabled(True)
+#            
+#            # and the previous_versions_groupBox
+#            self.previous_versions_groupBox.setEnabled(True)
     
-    def shot_description_edit_pushButton_clicked(self):
-        """checks the shot_description_edit_pushButton
-        """
-        # TODO: organize the actions, first do what needs to be done and then update the interface
-        
-        button = self.shot_description_edit_pushButton
-        text_field = self.shot_description_textEdit
-        list_widget = self.shots_listWidget
-        tab = self.assets_tab
-        
-        # check or uncheck
-        if button.text() != u"Done":
-            # change the text to "Done"
-            button.setText(u"Done")
-            
-            # make the text field read-write
-            text_field.setReadOnly(False)
-            
-            # to discourage edits
-            # disable the assets_listWidget
-            list_widget.setEnabled(False)
-            
-            # and the projects_comboBox
-            self.projects_comboBox.setEnabled(False)
-            
-            # and the sequences_comboBox
-            self.sequences_comboBox.setEnabled(False)
-            
-            # and the create_shot_pushButton
-            self.create_shot_pushButton.setEnabled(False)
-            
-            # and the assets_tab
-            tab.setEnabled(False)
-            
-            # and the new_version_groupBox
-            self.new_version_groupBox.setEnabled(False)
-            
-            # and the previous_versions_groupBox
-            self.previous_versions_groupBox.setEnabled(False)
-        else:
-            # change the text to "Edit"
-            button.setText("Edit")
-            button.setStyleSheet("")
-            text_field.setReadOnly(True)
-            
-            index = self.shots_listWidget.currentIndex().row()
-            shot = self.shots_listWidget.shots[index]
-            
-            # update the shot description
-            logger.debug("shot description of %s changed to '%s'" % (
-                    shot,
-                    self.shot_description_textEdit.toPlainText()
-                )
-            )
-            
-            # only issue an update if the description has changed
-            new_description = self.shot_description_textEdit.toPlainText()
-            
-            if shot.description != new_description:
-                shot.description = new_description
-                shot.save()
-            
-            # re-enable shots_listWidget
-            list_widget.setEnabled(True)
-            
-            # and the projects_comboBox
-            self.projects_comboBox.setEnabled(True)
-            
-            # and the create_asset_pushButton
-            self.create_shot_pushButton.setEnabled(True)
-            
-            # and the sequences_comboBox
-            self.sequences_comboBox.setEnabled(True)
-            
-            # and the shots_tab
-            tab.setEnabled(True)
-            
-            # and the new_version_groupBox
-            self.new_version_groupBox.setEnabled(True)
-            
-            # and the previous_versions_groupBox
-            self.previous_versions_groupBox.setEnabled(True)
+#    def shot_description_edit_pushButton_clicked(self):
+#        """checks the shot_description_edit_pushButton
+#        """
+#        # TODO: organize the actions, first do what needs to be done and then update the interface
+#        
+#        button = self.shot_description_edit_pushButton
+#        text_field = self.shot_description_textEdit
+#        list_widget = self.shots_listWidget
+#        tab = self.assets_tab
+#        
+#        # check or uncheck
+#        if button.text() != u"Done":
+#            # change the text to "Done"
+#            button.setText(u"Done")
+#            
+#            # make the text field read-write
+#            text_field.setReadOnly(False)
+#            
+#            # to discourage edits
+#            # disable the assets_listWidget
+#            list_widget.setEnabled(False)
+#            
+#            # and the projects_comboBox
+#            self.projects_comboBox.setEnabled(False)
+#            
+#            # and the sequences_comboBox
+#            self.sequences_comboBox.setEnabled(False)
+#            
+#            # and the create_shot_pushButton
+#            self.create_shot_pushButton.setEnabled(False)
+#            
+#            # and the assets_tab
+#            tab.setEnabled(False)
+#            
+#            # and the new_version_groupBox
+#            self.new_version_groupBox.setEnabled(False)
+#            
+#            # and the previous_versions_groupBox
+#            self.previous_versions_groupBox.setEnabled(False)
+#        else:
+#            # change the text to "Edit"
+#            button.setText("Edit")
+#            button.setStyleSheet("")
+#            text_field.setReadOnly(True)
+#            
+#            index = self.shots_listWidget.currentIndex().row()
+#            shot = self.shots_listWidget.shots[index]
+#            
+#            # update the shot description
+#            logger.debug("shot description of %s changed to '%s'" % (
+#                    shot,
+#                    self.shot_description_textEdit.toPlainText()
+#                )
+#            )
+#            
+#            # only issue an update if the description has changed
+#            new_description = self.shot_description_textEdit.toPlainText()
+#            
+#            if shot.description != new_description:
+#                shot.description = new_description
+#                shot.save()
+#            
+#            # re-enable shots_listWidget
+#            list_widget.setEnabled(True)
+#            
+#            # and the projects_comboBox
+#            self.projects_comboBox.setEnabled(True)
+#            
+#            # and the create_asset_pushButton
+#            self.create_shot_pushButton.setEnabled(True)
+#            
+#            # and the sequences_comboBox
+#            self.sequences_comboBox.setEnabled(True)
+#            
+#            # and the shots_tab
+#            tab.setEnabled(True)
+#            
+#            # and the new_version_groupBox
+#            self.new_version_groupBox.setEnabled(True)
+#            
+#            # and the previous_versions_groupBox
+#            self.previous_versions_groupBox.setEnabled(True)
     
     def create_asset_pushButton_clicked(self):
         """
@@ -2644,20 +1286,25 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         
         versionable = None
         if self.tabWidget.currentIndex() == 0:
-            asset_name = self.assets_listWidget.currentItem().text()
-            versionable = \
-                db.query(Asset)\
-                .filter(Asset.project==proj)\
-                .filter_by(name=asset_name)\
-                .first()
-
-            logger.debug("updating take list for asset: %s" % versionable.name)
+            #asset_name = self.assets_listWidget.currentItem().text()
+            #versionable = \
+            #    db.query(Asset)\
+            #    .filter(Asset.project==proj)\
+            #    .filter_by(name=asset_name)\
+            #    .first()
+            
+            index = self.assets_listWidget.currentIndex().row()
+            
+            if index != -1:
+                versionable = self.assets_listWidget.assets[index]
+                logger.debug("updating take list for asset: %s" % versionable.name)
         
         else:
             index = self.shots_listWidget.currentIndex().row()
-            versionable = self.shots_listWidget.shots[index]
             
-            logger.debug("updating take list for shot: %s" % versionable.code)
+            if index != -1:
+                versionable = self.shots_listWidget.shots[index]
+                logger.debug("updating take list for shot: %s" % versionable.code)
         
         return versionable
     
@@ -2679,7 +1326,10 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         type_for = versionable.__class__.__name__
         
         # get the version type name
-        version_type_name = self.version_types_comboBox.currentText()
+        version_type_name = ""
+        item = self.version_types_listWidget.currentItem()
+        if item:
+            version_type_name = item.text()
         
         # get the version type instance
         return db.query(VersionType)\
@@ -2701,13 +1351,13 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
             return None
     
     def add_type(self, version_type):
-        """adds new types to the version_types_comboBox
+        """adds new types to the version_types_listWidget
         """
         
         if not isinstance(version_type, VersionType):
             raise TypeError("please supply a "
                             "oyProjectManager.core.models.VersionType for the"
-                            "type to be added to the version_type_comboBox")
+                            "type to be added to the version_types_listWidget")
         
         # check if the given type is suitable for the current versionable
         versionable = self.get_versionable()
@@ -2718,13 +1368,18 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
                 self.tabWidget.currentIndex()
             ))
         
-        index = self.version_types_comboBox.findText(version_type.name)
+        items = self.version_types_listWidget.findItems(
+            version_type.name,
+            QtCore.Qt.MatchExactly
+        )
         
-        if index == -1:
-            self.version_types_comboBox.addItem(version_type.name)
-            self.version_types_comboBox.setCurrentIndex(
-                self.version_types_comboBox.count() - 1
-            )
+        if not len(items):
+            self.version_types_listWidget.addItem(version_type.name)
+            
+            # select the last added type
+            index = self.version_types_listWidget.count() - 1
+            item = self.version_types_listWidget.item(index)
+            self.version_types_listWidget.setCurrentItem(item)
     
     def add_type_toolButton_clicked(self):
         """adds a new type for the currently selected Asset or Shot
@@ -2738,8 +1393,10 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         
         # get all the current types from the interface
         current_types = []
-        for index in range(self.version_types_comboBox.count()):
-            current_types.append(self.version_types_comboBox.itemText(index))
+        for index in range(self.version_types_listWidget.count()):
+            current_types.append(
+                self.version_types_listWidget.item(index).text()
+            )
         
         # available types for Versionable in this environment
         # if there is an environment given
@@ -2809,14 +1466,16 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         )
         
         if ok:
-            # add the given text to the takes_comboBox
+            # add the given text to the takes_listWidget
             # if it is not empty
             if take_name != "":
-                self.takes_comboBox.addItem(take_name)
+                item = self.takes_listWidget.addItem(take_name)
                 # set the take to the new one
-                self.takes_comboBox.setCurrentIndex(
-                    self.takes_comboBox.count() - 1
-                )
+                self.takes_listWidget.setCurrentItem(item)
+#                setCurrentRow(
+#                    self.takes_listWidget.count() - 1,
+#                    QtGui.QItemSelectionModel.Rows
+#                )
     
     def get_new_version(self):
         """returns a :class:`~oyProjectManager.core.models.Version` instance
@@ -2828,14 +1487,16 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         # create a new version
         versionable = self.get_versionable()
         version_type = self.get_version_type()
-        take_name = self.takes_comboBox.currentText()
+        take_name = self.takes_listWidget.currentItem().text()
         user = self.get_user()
         
         note = self.note_textEdit.toPlainText()
         
+        published = self.publish_checkBox.isChecked()
+        
         version = Version(
             versionable, versionable.code, version_type, user,
-            take_name=take_name, note=note
+            take_name=take_name, note=note, is_published=published
         )
         
         return version
@@ -2872,6 +1533,16 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         # call the environments export_as method
         if self.environment is not None:
             self.environment.export_as(new_version)
+            
+            # inform the user about what happened
+            if logger.level != logging.DEBUG:
+                QtGui.QMessageBox.information(
+                    self,
+                    "Export",
+                    new_version.filename + "\n\n has been exported correctly!",
+                    QtGui.QMessageBox.Ok
+                )
+
     
     def save_as_pushButton_clicked(self):
         """runs when the save_as_pushButton clicked
@@ -2896,9 +1567,10 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         # save the new version to the database
         db.session.add(new_version)
         db.session.commit()
-
+        
+        
         # save the last user
-        conf.last_user_id = new_version.created_by_id
+        conf.last_user_id = new_version.created_by.id
         
         # close the UI
         self.close()
@@ -2915,10 +1587,11 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         # call the environments open_ method
         if self.environment is not None:
             
+            to_update_list = []
             # environment can throw RuntimeError for unsaved changes
-            
             try:
-                self.environment.open_(old_version)
+                envStatus, to_update_list = \
+                    self.environment.open_(old_version)
             except RuntimeError as e:
                 # pop a dialog and ask if the user really wants to open the
                 # file
@@ -2940,14 +1613,16 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
                 else:
                     # no, just return
                     return
+            
+            # check the to_update_list to update old versions
+            if len(to_update_list):
+                # invoke the assetUpdater for this scene
+                version_updater_mainDialog = \
+                    version_updater.MainDialog(self.environment, self)
                 
-#                # check the to_update_list to update old versions
-#                if len(to_update_list):
-#                    # invoke the assetUpdater for this scene
-#                    assetUpdaterMainDialog = version_updater.MainDialog(self.environment.name, self )
-#                    assetUpdaterMainDialog.exec_()
-                    
-                self.environment.post_open(old_version)
+                version_updater_mainDialog.exec_()
+            
+            self.environment.post_open(old_version)
         
         # close the dialog
         self.close()
@@ -2959,12 +1634,33 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         # get the new version
         previous_version = self.get_previous_version()
         
+        # allow only published versions to be referenced
+        if not previous_version.is_published:
+            QtGui.QMessageBox.critical(
+                self,
+                "Critical Error",
+                "Referencing <b>un-published versions</b> are not allowed!\n"
+                "Please reference a published version of the same Asset/Shot",
+                QtGui.QMessageBox.Ok
+            )
+            return
+        
         logger.debug("referencing version %s" % previous_version)
         
         # call the environments reference method
         if self.environment is not None:
             self.environment.reference(previous_version)
-    
+            
+            # inform the user about what happened
+            if logger.level != logging.DEBUG:
+                QtGui.QMessageBox.information(
+                    self,
+                    "Reference",
+                    previous_version.filename +\
+                    "\n\n has been referenced correctly!",
+                    QtGui.QMessageBox.Ok
+                )
+
     def import_pushButton_clicked(self):
         """runs when the import_pushButton clicked
         """
@@ -2977,4 +1673,181 @@ class MainDialog_New(QtGui.QDialog, version_creator_UI.Ui_Dialog):
         # call the environments import_ method
         if self.environment is not None:
             self.environment.import_(previous_version)
+
+            # inform the user about what happened
+            if logger.level != logging.DEBUG:
+                QtGui.QMessageBox.information(
+                    self,
+                    "Import",
+                    previous_version.filename +\
+                    "\n\n has been imported correctly!",
+                    QtGui.QMessageBox.Ok
+                )
+
+    def clear_thumbnail(self):
+        """clears the thumbnail area
+        """
+        
+        # clear the graphics scene in case there is no thumbnail
+        scene = self.thumbnail_graphicsView.scene()
+        if not scene:
+            scene = QtGui.QGraphicsScene(self.thumbnail_graphicsView)
+            self.thumbnail_graphicsView.setScene(scene)
+        
+        scene.clear()
+
+    def update_thumbnail(self):
+        """updates the thumbnail for the selected versionable
+        """
+        
+        # get the current versionable
+        versionable = self.get_versionable()
+        
+        self.clear_thumbnail()
+        
+        # try to get a path for the thumbnail
+        if versionable:
+            if versionable.thumbnail:
+                logger.debug("updating thumbnail for %s" % versionable.code)
+
+                # get the thumbnail full path
+                thumbnail_full_path = os.path.expandvars(
+                    os.path.join(
+                        "$" + conf.repository_env_key,
+                        versionable.thumbnail
+                    )
+                )
+
+                logger.debug("creating pixmap from: %s" % thumbnail_full_path)
+
+                pixmap = QtGui.QPixmap(thumbnail_full_path).scaled(
+                    self.thumbnail_graphicsView.size(),
+                    QtCore.Qt.KeepAspectRatio,
+                    QtCore.Qt.SmoothTransformation
+                )
+                
+                scene = self.thumbnail_graphicsView.scene()
+                scene.addPixmap(pixmap)
+
+    def upload_thumbnail_pushButton_clicked(self):
+        """runs when the upload_thumbnail_pushButton is clicked
+        """
+        
+        # get a file from a FileDialog
+        thumbnail_full_path = QtGui.QFileDialog.getOpenFileName(
+            self, "Choose Thumbnail",
+            os.path.expanduser("~"),
+            "Image Files (*.png *.jpg *.bmp)"
+        )
+
+        if isinstance(thumbnail_full_path, tuple):
+            thumbnail_full_path = thumbnail_full_path[0]
+        
+        # if the tumbnail_full_path is empty do not do anything
+        if thumbnail_full_path == "":
+            return
+        
+        # get the current versionable
+        versionable = self.get_versionable()
+        
+        self.upload_thumbnail(versionable, thumbnail_full_path)
+        
+        # update the thumbnail
+        self.update_thumbnail()
     
+    def upload_thumbnail(self, versionable, thumbnail_source_full_path):
+        """Uploads the given thumbnail for the given versionable
+        
+        :param versionable: An instance of
+          :class:`~oyProjectManager.core.models.VersionableBase` which in
+          practice is an :class:`~oyProjectManager.core.models.Asset` or
+          a :class:`~oyProjectManager.core.models.Shot`.
+        
+        :param str thumbnail_full_path: A string which is showing the path of
+          the thumbnail image
+        """
+        
+        # split path, filename and extension
+        splits = os.path.split(thumbnail_source_full_path)
+        source_path = splits[0]
+        
+        splits = os.path.splitext(splits[1])
+        source_filename = splits[0]
+        source_extension = splits[1].replace(".", "")
+        
+        # create template vars
+        template_vars = {
+            "path": source_path,
+            "filename": source_filename,
+            "extension": source_extension
+        }
+        
+        # define the template for the versionable type (asset or shot)
+        thumbnail_full_path = ""
+        
+        if isinstance(versionable, Asset):
+            path_template = jinja2.Template(conf.asset_thumbnail_path)
+            filename_template = jinja2.Template(conf.asset_thumbnail_filename)
+
+            template_vars.update(
+                {
+                    "project": versionable.project,
+                    "asset": versionable,
+                }
+            )
+        elif isinstance(versionable, Shot):
+            path_template = jinja2.Template(conf.shot_thumbnail_path)
+            filename_template = jinja2.Template(conf.shot_thumbnail_filename)
+            
+            template_vars.update(
+                {
+                    "project": versionable.project,
+                    "sequence": versionable.sequence,
+                    "shot": versionable
+                }
+            )
+        
+        # render the templates
+        path = path_template.render(**template_vars)
+        filename = filename_template.render(**template_vars)
+        
+        # the path should be $REPO relative
+        thumbnail_full_path = os.path.join(
+            os.environ[conf.repository_env_key], path, filename
+        )
+        
+        # upload the choosen image to the repo, overwrite any image present
+        if thumbnail_full_path != "":
+            logger.debug("uploading thumbnail from:\n%s\nto:\n%s" % (
+                    thumbnail_source_full_path,
+                    thumbnail_full_path
+                )
+            )
+            # create the dirs
+            try:
+                os.makedirs(os.path.split(thumbnail_full_path)[0])
+            except OSError:
+                # dir exists
+                pass
+            
+            # instead of copying the item
+            #shutil.copy(thumbnail_source_full_path, thumbnail_full_path)
+            # just render a resized version to the output path
+            pixmap = QtGui.QPixmap(thumbnail_source_full_path).scaled(
+                self.thumbnail_graphicsView.size(),
+                QtCore.Qt.KeepAspectRatio,
+                QtCore.Qt.SmoothTransformation
+            )
+            # now render it to the path
+            pixmap.save(
+                thumbnail_full_path,
+                conf.thumbnail_format,
+                conf.thumbnail_quality
+            ) 
+
+        # update the database
+        versionable.thumbnail = \
+            os.path.join(path, filename).replace("\\", "/")
+        versionable.save()
+        
+        

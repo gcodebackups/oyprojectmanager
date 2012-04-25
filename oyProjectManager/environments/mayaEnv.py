@@ -106,8 +106,10 @@ class Maya(EnvironmentBase):
         self.set_fps(project.fps)
         
         # set render resolution
-        self.set_resolution(project.width, project.height,
-            project.pixel_aspect)
+        # only if the file is a new version
+        if version.version_number == 1:
+            self.set_resolution(project.width, project.height,
+                project.pixel_aspect)
         
         # set the render file name and version
         self.set_render_fileName(version)
@@ -123,7 +125,7 @@ class Maya(EnvironmentBase):
         pm.delete(unknownNodes)
         
         # set the file paths for external resources
-        self.replace_external_paths()
+        self.replace_external_paths(mode=1)
         
         # save the file
         pm.saveAs(
@@ -132,10 +134,12 @@ class Maya(EnvironmentBase):
         )
         
         # update the reference list
+        # TODO: Why am I not using self.update_references_list here
         reference_list = []
         reference_info = self.get_referenced_versions()
         for data in reference_info:
-            reference_list.append(data[0])
+            if data[0] not in reference_list:
+                reference_list.append(data[0])
         
         version.references = reference_list
         version.save()
@@ -163,6 +167,9 @@ class Maya(EnvironmentBase):
         
         # export the file
         pm.exportSelected(version.full_path, type='mayaAscii')
+        
+        # save the version
+        version.save()
         
         return True
     
@@ -205,7 +212,7 @@ class Maya(EnvironmentBase):
         self.append_to_recent_files(version.full_path)
         
         # replace_external_paths
-        self.replace_external_paths()
+        self.replace_external_paths(mode=1)
         
         # check the referenced assets for newer version
         to_update_list = self.check_referenced_versions()
@@ -259,13 +266,20 @@ class Maya(EnvironmentBase):
         # replace the path with environment variable
         new_version_full_path = repo.relative_path(new_version_full_path)
         
-        pm.createReference(
+        ref = pm.createReference(
             new_version_full_path,
             gl=True,
-            loadReferenceDepth='all',
+            loadReferenceDepth='none',
             namespace=namespace,
             options='v=0'
         )
+        
+        # replace external paths
+        self.replace_external_paths(1)
+        
+        # set the reference state to loaded
+        if not ref.isLoaded():
+            ref.load()
         
         # append the referenced version to the current versions references
         # attribute
@@ -430,7 +444,7 @@ class Maya(EnvironmentBase):
         # defaultRenderGlobals
         dRG = pm.PyNode('defaultRenderGlobals')
         dRG.setAttr('imageFilePrefix', render_file_rel_path)
-        dRG.setAttr('renderVersion', "%03d" % version.version_number )
+        dRG.setAttr('renderVersion', "v%03d" % version.version_number )
         dRG.setAttr('animation', 1)
         dRG.setAttr('outFormatControl', 0 )
         dRG.setAttr('extensionPadding', 3 )
@@ -454,7 +468,19 @@ class Maya(EnvironmentBase):
             import pymel
             try:
                 if pymel.versions.current() >= pymel.versions.v2012:
-                    mrG = pm.PyNode("mentalrayGlobals")
+                    try:
+                        mrG = pm.PyNode("mentalrayGlobals")
+                    except pm.general.MayaNodeError:
+                        # the renderer is set to mentalray but it is not loaded
+                        # so there is no mentalrayGlobals
+                        # create them
+                        
+                        # dirty little maya tricks
+                        pm.mel.miCreateDefaultNodes()
+                        
+                        # get it again
+                        mrG = pm.PyNode("mentalrayGlobals")
+                    
                     mrG.setAttr("imageCompression", 4)
             except AttributeError, pm.general.MayaNodeError:
                 pass
@@ -484,9 +510,15 @@ class Maya(EnvironmentBase):
             "Playblast"
         )
         
+        # use project name and sequence name if available
+        playblast_filename = version.version_of.project.code
+        if version.type.type_for=="Shot":
+            playblast_filename += "_" + version.version_of.sequence.code
+        playblast_filename += "_" + os.path.splitext(version.filename)[0]
+        
         playblast_full_path = os.path.join(
             playblast_path,
-            os.path.splitext(version.filename)[0]
+            playblast_filename
         ).replace('\\','/')
         
         # create the folder
@@ -549,7 +581,7 @@ class Maya(EnvironmentBase):
         """checks the referenced assets versions
         
         returns a list of Version instances and maya Reference objects in a
-        tupple
+        tuple
         """
         
         # get all the valid version references
@@ -558,15 +590,14 @@ class Maya(EnvironmentBase):
         to_be_updated_list = []
         
         for version_tuple in version_tuple_list:
-            
             version = version_tuple[0]
             
-            if not version.is_latest_version():
+            if not version.is_latest_published_version():
                 # add version to the update list
                 to_be_updated_list.append(version_tuple)
-            
+        
         # sort the list according to full_path
-        return sorted(to_be_updated_list, None, lambda x: x[2])
+        return sorted(to_be_updated_list, key=lambda x: x[2])
     
     def get_referenced_versions(self):
         """Returns the versions those been referenced to the current scene
@@ -597,7 +628,7 @@ class Maya(EnvironmentBase):
                             temp_version_full_path
                         )
                     )
-                )
+                ).replace("\\", "/")
             
             refs_and_paths.append((reference, temp_version_full_path))
         
@@ -610,7 +641,6 @@ class Maya(EnvironmentBase):
         prev_full_path = ''
         
         for reference, full_path in refs_and_paths:
-            
             if full_path == prev_full_path:
                 # directly append the version to the list
                 valid_versions.append(
@@ -642,14 +672,18 @@ class Maya(EnvironmentBase):
             reference_list = []
             reference_info = self.get_referenced_versions()
             for data in reference_info:
-                reference_list.append(data[0])
-    
+                if data[0] not in reference_list:
+                    reference_list.append(data[0])
+            
             version.references = reference_list
             version.save()
     
     def update_versions(self, version_tuple_list):
         """update versions to the latest version
         """
+        
+        repo = Repository()
+        repo_env_key = "$" + conf.repository_env_key
         
         previous_version_full_path = ''
         
@@ -662,7 +696,12 @@ class Maya(EnvironmentBase):
                 latest_version = version.latest_version()
                 previous_version_full_path = version_full_path
             
-            reference.replaceWith(latest_version.full_path)
+            reference.replaceWith(
+                latest_version.full_path.replace(
+                    repo.server_path,
+                    repo_env_key
+                )
+            )
     
     def get_frame_range(self):
         """returns the current playback frame range
@@ -861,17 +900,30 @@ class Maya(EnvironmentBase):
             return False
     
     def replace_external_paths(self, mode=0):
-        """replaces all the external paths
+        """Replaces all the external paths
         
         replaces:
-          references: to a path with $REPO env variable
-          file and mentalrayTextures: to a relative path to the project path
-                                      (the self._asset.sequencefull_path)
+          references: to a path which starts with $REPO env variable in
+                      absolute mode and a workspace relative path in relative
+                      mode
+          file      : to a path which starts with $REPO env variable in
+                      absolute mode and a workspace relative path in relative
+                      mode
+        
+        Absolute mode works best for now.
+        
+        .. note::
+          After v0.2.2 the system doesn't care about the mentalrayTexture
+          nodes because the lack of a good environment variable support from
+          that node. Use regular maya file nodes with mib_texture_filter_lookup
+          nodes to have the same sharp results.
         
         :param mode: Defines the process mode:
           if mode == 0 : replaces with relative paths
           if mode == 1 : replaces with absolute paths
         """
+        
+        # TODO: Also check for image planes and replace the path
         
         logger.debug("replacing paths with mode: %i" % mode)
         
@@ -883,34 +935,48 @@ class Maya(EnvironmentBase):
         
         # replace reference paths with $REPO
         for ref in pm.listReferences():
-            if ref.unresolvedPath().replace("\\", "/").\
-                startswith(repo.server_path):
-
-                new_ref_path = ""
+            unresolved_path = ref.unresolvedPath().replace("\\", "/")
+            
+            if not unresolved_path.startswith("$" + conf.repository_env_key):
                 
-                if mode:
-                    new_ref_path = utils.relpath(
+                # make it absolute
+                if not os.path.isabs(unresolved_path):
+                    unresolved_path = os.path.join(
                         workspace_path,
-                        ref.path
-                    )
-                else:
-                    new_ref_path = ref.path.replace(
-                        repo.server_path,
-                        repo_env_key
+                        unresolved_path
                     )
                 
-                logger.info("replacing reference:", ref.path)
-                logger.info("replacing with:", new_ref_path)
-                
-                ref.replaceWith(new_ref_path)
+                if unresolved_path.startswith(repo.server_path):
+    
+                    new_ref_path = ""
+                    
+                    if mode:
+                        # convert to absolute path
+                        new_ref_path = ref.path.replace(
+                            repo.server_path,
+                            repo_env_key
+                        )
+                    else:
+                        # convert to relative path
+                        new_ref_path = utils.relpath(
+                            workspace_path,
+                            ref.path
+                        )
+                    
+                    logger.info("replacing reference:", ref.path)
+                    logger.info("replacing with:", new_ref_path)
+                    
+                    ref.replaceWith(new_ref_path)
         
         # texture files
-        # replace with workspace relative paths
+        # replace with $REPO
         for image_file in pm.ls(type="file"):
             file_texture_path = image_file.getAttr("fileTextureName")
             file_texture_path = file_texture_path.replace("\\", "/")
             
             logger.info("replacing file texture: %s" % file_texture_path)
+            
+            file_texture_path = os.path.expandvars(file_texture_path)
             
             # convert to absolute
             if not os.path.isabs(file_texture_path):
@@ -921,51 +987,26 @@ class Maya(EnvironmentBase):
             new_path = ""
             
             if mode:
-                new_path = file_texture_path
+                # convert to absolute
+                new_path = file_texture_path.replace(
+                    os.environ[conf.repository_env_key],
+                    "$" + conf.repository_env_key
+                )
             else:
+                # convert to relative
                 new_path = utils.relpath(
                     workspace_path,
                     file_texture_path,
                     "/", ".."
                 )
+#                new_path = new_path.replace(
+#                    os.environ[conf.repository_env_key],
+#                    "$" + conf.repository_env_key
+#                )
             
             logger.info("with: %s" % new_path)
             
             image_file.setAttr("fileTextureName", new_path)
-        
-        # replace mentalray textures
-        for mr_texture in pm.ls(type="mentalrayTexture"):
-            mr_texture_path =  mr_texture.getAttr("fileTextureName")
-            mr_texture_path = mr_texture_path.replace("\\", "/")
-            
-            logger.info("replacing mr texture: %s" % mr_texture_path)
-            
-            if mr_texture_path is not None:
-            
-                # convert to absolute
-                if not os.path.isabs(mr_texture_path):
-                    mr_texture_path = os.path.join(
-                        workspace_path, mr_texture_path
-                    ).replace("\\", "/")
-
-                new_path = ""
-                if mode:
-                    # convert to absolute
-                    new_path = mr_texture_path
-                else:
-                    # convert to relative
-                    new_path = utils.relpath(
-                        workspace_path,
-                        mr_texture_path,
-                        "/", ".."
-                    )
-                
-                logger.info("with: %s" % new_path)
-                
-                mr_texture.setAttr(
-                    "fileTextureName",
-                    new_path
-                )
     
     def create_workspace_file(self, path):
         """creates the workspace.mel at the given path

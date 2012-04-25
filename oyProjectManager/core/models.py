@@ -11,8 +11,8 @@ import logging
 import jinja2
 #from beaker import cache
 
-from sqlalchemy import (orm, Column, String, Integer, Float, Enum, PickleType,
-                        ForeignKey, UniqueConstraint, Boolean)
+from sqlalchemy import (orm, Column, String, Integer, Float, Enum, ForeignKey,
+                        UniqueConstraint, Boolean)
 from sqlalchemy.ext.associationproxy import association_proxy
 from sqlalchemy.ext.declarative import synonym_for
 from sqlalchemy.orm import relationship, synonym, backref
@@ -338,8 +338,9 @@ class Project(Base):
     width = Column(Integer)
     height = Column(Integer)
     pixel_aspect = Column(Float)
-        
-    structure = Column(PickleType)
+    
+    #structure = Column(PickleType)
+    structure = Column(String)
     
     sequences = relationship(
         "Sequence",
@@ -652,12 +653,14 @@ class Sequence(Base):
     
     __tablename__ = "Sequences"
     __table_args__  = (
+        UniqueConstraint("code", "project_id"),
+        UniqueConstraint("name", "project_id"),
         {"extend_existing":True}
     )
     
     id = Column(Integer, primary_key=True)
-    name = Column(String(256), unique=True)
-    code = Column(String(256), unique=True)
+    name = Column(String(256))
+    code = Column(String(256))
     description = Column(String)
     
     project_id = Column(Integer, ForeignKey("Projects.id"))
@@ -764,20 +767,22 @@ class Sequence(Base):
         shot_range_formula should be a range in on of the following format:
         #
         #,#
-        #-#
-        #,#-#
-        #,#-#,#
-        #-#,#
+        #-# (not supported anymore)
+        #,#-# (not supported anymore)
+        #,#-#,# (not supported anymore)
+        #-#,# (not supported anymore)
         etc.
         """
         
-        # for now consider the shot_range_formula as a string of range
-        # do the hard work later
+        ## for now consider the shot_range_formula as a string of range
+        ## do the hard work later
+        #
+        #new_shot_numbers = utils.uncompress_range(shot_range_formula)
+        #
+        ## convert the list to strings
+        #new_shot_numbers = map(str, new_shot_numbers)
         
-        new_shot_numbers = utils.uncompress_range(shot_range_formula)
-        
-        # convert the list to strings
-        new_shot_numbers = map(str, new_shot_numbers)
+        new_shot_numbers = shot_range_formula.split(",")
         
         new_shots = []
         for shot_number in new_shot_numbers:
@@ -950,8 +955,15 @@ class VersionableBase(Base):
     id = Column(Integer, primary_key=True)
     
     _versions = relationship("Version")
-    project_id = Column(Integer, ForeignKey("Projects.id"), nullable=False)
-    _project = relationship("Project")
+    
+    project_id = Column(
+        Integer, ForeignKey("Projects.id"),
+        nullable=False
+    )
+    _project = relationship(
+        "Project",
+        cascade="all"
+    )
     
     _code = Column(
         String(128),
@@ -966,6 +978,8 @@ class VersionableBase(Base):
     _name = Column(String(128))
     
     description = Column(String)
+    
+    thumbnail = Column(String)
     
     @synonym_for("_versions")
     @property
@@ -984,7 +998,6 @@ class VersionableBase(Base):
         
         It is a read-only attribute
         """
-        
         return self._project
 
     @validates("description")
@@ -1013,6 +1026,9 @@ class Shot(VersionableBase):
       
       I hope I'll fix it in a later version.
     
+    The total of the handle attributes should not be bigger then duration-1, in
+    which results no frame for the real shot.
+    
     :param sequence: The :class:`~oyProjectManager.core.models.Sequence`
       instance that this Shot should belong to. The Sequence may not be created
       yet. Skipping it or passing None will raise TypeError, and anything
@@ -1035,20 +1051,24 @@ class Shot(VersionableBase):
     :param description: A string holding the short description of this shot.
       Can be skipped.
     """
-
+    
     __tablename__ = "Shots"
     __table_args__  = (
         UniqueConstraint("sequence_id", "number"),
         {"extend_existing":True}
     )
     __mapper_args__ = {"polymorphic_identity": "Shot"}
-
+    
     shot_id =  Column("id", Integer, ForeignKey("Versionables.id") ,primary_key=True)
-
+    
     number = Column(String)
     
     start_frame = Column(Integer, default=1)
     end_frame = Column(Integer, default=1)
+    
+    # TODO: create tests for handles
+    handle_at_start = Column(Integer, default=0)
+    handle_at_end = Column(Integer, default=0)
     
     sequence_id = Column(Integer, ForeignKey("Sequences.id"))
     _sequence = relationship(
@@ -1062,7 +1082,7 @@ class Shot(VersionableBase):
                  start_frame=1,
                  end_frame=1,
                  description=''):
-
+        
         self._sequence = self._validate_sequence(sequence)
         # update the project attribute
         self._project = self._sequence.project
@@ -1074,6 +1094,9 @@ class Shot(VersionableBase):
         self._duration = 1
         self.start_frame = start_frame
         self.end_frame = end_frame
+        
+        self.handle_at_start = 0
+        self.handle_at_end = 0
         
         #self._cutSummary = ''
     
@@ -1179,6 +1202,7 @@ class Shot(VersionableBase):
     def duration(self):
         """the duration
         """
+        self._update_duration(self.start_frame, self.end_frame)
         return self._duration
 
 
@@ -1196,14 +1220,15 @@ class Shot(VersionableBase):
 
         # then format it
         # remove anything which is not a number or letter
-        number = re.sub(r"[^0-9a-zA-Z]+", "", number)
+        number = re.sub(r"[^0-9a-zA-Z\-]+", "", number)
 
         # remove anything which is not a number from the beginning
-        number = re.sub(
-            r"(^[^0-9]*)([0-9]*)([a-zA-Z]{0,1})([a-zA-Z0-9]*)",
-            r"\2\3",
-            number
-        ).upper()
+        #number = re.sub(
+        #    r"(^[^0-9]*)([0-9]*)([a-zA-Z]{0,1})([a-zA-Z0-9]*)",
+        #    r"\2\3",
+        #    number
+        #).upper()
+        number = number.upper()
 
         if number == "":
             raise ValueError("Shot.number is not in good format, please "
@@ -1247,11 +1272,59 @@ class Shot(VersionableBase):
           >> shot.code
             "SH012A"
         """
-        number = re.sub(r"[A-Z]+", "", self.number)
-        alter = re.sub(r"[0-9]+", "", self.number)
         
-        return self.project.shot_number_prefix +\
+        # TODO: there is a weird situation here need to fix it later by
+        # introducing a new variable to the Project
+        if "-" in self.number:
+            return self.project.shot_number_prefix + self.number
+        else:
+            number = re.sub(r"[A-Z]+", "", self.number)
+            alter = re.sub(r"[0-9]+", "", self.number)
+            
+            return self.project.shot_number_prefix +\
                number.zfill(self.project.shot_number_padding) + alter
+    
+    @validates("handle_at_start")
+    def _validate_handles_at_start(self, key, handle_at_start):
+        """validates the given handle_at_start value
+        """
+        
+        if not isinstance(handle_at_start, int):
+            raise TypeError("Shot.handle_at_start should be an instance of "
+            "integer not %s" % type(handle_at_start))
+        
+        if handle_at_start < 0:
+            raise ValueError("Shot.handle_at_start can not be a negative "
+                             "value")
+        
+        # the total count of the handles can not be bigger than duration-1
+        if self.handle_at_end is not None:
+            if handle_at_start + self.handle_at_end > self.duration - 1:
+                raise ValueError("Shot.handle_at_start + Shot.handle_at_end "
+                                 "can not be bigger than Shot.duration - 1")
+
+        return handle_at_start
+    
+    @validates("handle_at_end")
+    def _validate_handle_at_end(self, key, handle_at_end):
+        """validates the given handle_at_end value
+        """
+        
+        if not isinstance(handle_at_end, int):
+            raise TypeError("Shot.handle_at_end should be an instance of "
+            "integer not %s" % type(handle_at_end))
+        
+        if handle_at_end < 0:
+            raise ValueError("Shot.handle_at_end can not be a negative "
+                             "value")
+        
+        # the total count of the handles can not be bigger than duration-1
+        if self.handle_at_start is not None:
+            if self.handle_at_start + handle_at_end > self.duration - 1:
+                raise ValueError("Shot.handle_at_start + Shot.handle_at_end "
+                                 "can not be bigger than Shot.duration - 1")
+
+        return handle_at_end
 
 class Asset(VersionableBase):
     """Manages Assets in a given :class:`~oyProjectManager.core.models.Project`
@@ -1347,7 +1420,7 @@ class Asset(VersionableBase):
         # remove unnecessary characters from the string
         code = re.sub("([^a-zA-Z0-9\s_]+)", r"", code)
         # remove all the characters from the beginning which are not alphabetic
-        code = re.sub("(^[^a-zA-Z]+)", r"", code)
+        code = re.sub("(^[^a-zA-Z0-9]+)", r"", code)
         # substitute all spaces with "_" characters
         code = re.sub("([\s])+", "_", code)
         
@@ -1397,7 +1470,7 @@ class Asset(VersionableBase):
         # remove unnecessary characters from the string
         name = re.sub("([^a-zA-Z0-9\s_-]+)", r"", name)
         # remove all the characters from the beginning which are not alphabetic
-        name = re.sub("(^[^a-zA-Z]+)", r"", name)
+        name = re.sub("(^[^a-zA-Z0-9]+)", r"", name)
 #        # substitute all spaces with "_" characters
 #        name = re.sub("([\s])+", "_", name)
         
@@ -1497,6 +1570,12 @@ class Version(Base):
     loosing the connection between a Version and a file on the repository for
     previously created Versions.
     
+    .. versionadded:: 0.2.2
+      Published Versions:
+      
+      After v0.2.2 Versions can be set published. It is a bool attribute
+      holding information about if this Version is published or not.
+    
     :param version_of: A :class:`~oyProjectManager.core.models.VersionableBase`
       instance (:class:`~oyProjectManager.core.models.Asset` or
       :class:`~oyProjectManager.core.models.Shot`) which is the owner of this
@@ -1554,6 +1633,9 @@ class Version(Base):
     
     :param str extension: A string holding the file extension of this version.
       It may or may not include a dot (".") sign as the first character.
+    
+    :param bool is_published: A bool value defining this Version as a published
+      one.
     """
 
     # TODO: add audit info like date_created, date_updated, created_at and updated_by
@@ -1600,6 +1682,8 @@ class Version(Base):
         backref="referenced_by"
     )
     
+    is_published = Column(Boolean, default=False)
+    
     def __init__(self,
                  version_of,
                  base_name,
@@ -1608,7 +1692,10 @@ class Version(Base):
                  take_name="MAIN",
                  version_number=1,
                  note="",
-                 extension=""):
+                 extension="",
+                 is_published=False):
+        self.is_published = is_published
+        
         self._version_of = version_of
         self._type = type
         self.base_name = base_name
@@ -1833,19 +1920,27 @@ class Version(Base):
 
         # strip the name
         name = name.strip()
-        # convert all the "-" signs to "_"
-        name = name.replace("-", "_")
+        # convert all the "-" signs to "_" at the beginning and the at the end
+        # of the string
+        #name = name.replace("-", "_")
+        #name = re.sub(r"^[\-]+", r"", name)
+        #name = re.sub(r"[\-]+$", r"", name)
         # remove unnecessary characters from the string
-        name = re.sub("([^a-zA-Z0-9\s_]+)", r"", name)
+        name = re.sub(r"([^a-zA-Z0-9\s_\-]+)", r"", name)
         # remove all the characters from the beginning which are not alphabetic
-        name = re.sub("(^[^a-zA-Z]+)", r"", name)
+        name = re.sub(r"(^[^a-zA-Z0-9]+)", r"", name)
         # substitute all spaces with "_" characters
-        name = re.sub("([\s])+", "_", name)
+        name = re.sub(r"([\s])+", "_", name)
         # make each words first letter uppercase
         name = "_".join([ word[0].upper() + word[1:]
                           for word in name.split("_")
                           if len(word)
         ])
+        name = "-".join([ word[0].upper() + word[1:]
+                          for word in name.split("-")
+                          if len(word)
+        ])
+        
 
         return name
 
@@ -1904,8 +1999,8 @@ class Version(Base):
         return db.session\
             .query(Version)\
             .filter(Version.type==self.type)\
-            .filter(Version.version_of == self.version_of)\
-            .filter(Version.take_name == self.take_name)\
+            .filter(Version.version_of==self.version_of)\
+            .filter(Version.take_name==self.take_name)\
             .order_by(Version.version_number.desc())\
             .first()
     
@@ -2021,8 +2116,31 @@ class Version(Base):
         """
         return self.max_version == self.version_number
     
+    def is_latest_published_version(self):
+        """returns True if this is the latest published Version False otherwise
+        """
+        if not self.is_published:
+            return False
+        
+        return self == self.latest_published_version()
+    
+    def latest_published_version(self):
+        """Returns the last published version.
+        
+        :return: :class:`~oyProjectManager.core.models.Version`
+        """
+        
+        return db.session\
+            .query(Version)\
+            .filter(Version.type==self.type)\
+            .filter(Version.version_of==self.version_of)\
+            .filter(Version.take_name==self.take_name)\
+            .filter(Version.is_published==True)\
+            .order_by(Version.version_number.desc())\
+            .first()
+    
     @property
-    def dependency_update_list(self):
+    def dependency_update_list(self, published_only=True):
         """Calculates a list of :class:`~oyProjectManager.core.models.Version`
         instances, which are referenced by this Version and has a newer
         version.
@@ -2040,11 +2158,22 @@ class Version(Base):
         
         update_list = []
         
+#        for ref in self.references:
+#            if not ref.is_latest_version():
+#                update_list.append(ref)
+#            # also loop in their references
+#            update_list.extend(ref.dependency_update_list)
+        
+        # for now just search for published versions for the first references
+        # do not search the children of it
         for ref in self.references:
-            if not ref.is_latest_version():
-                update_list.append(ref)
-            # also loop in their references
-            update_list.extend(ref.dependency_update_list)
+            # get the last published versions of the references
+            published_version = ref.latest_published_version()
+            # if the version number is bigger add it to the update list
+            if published_version:
+                if published_version.version_number > ref.version_number:
+                    update_list.append(ref)
+        
         
         return update_list
 
@@ -2325,7 +2454,7 @@ class VersionType(Base):
     )
     
     _type_for = Column(
-        Enum("Asset", "Shot"),
+        Enum("Asset", "Shot", name="ckEnumType"),
         doc="""A enum value showing if this version type is valid for Assets or
         Shots.
         """
@@ -2592,9 +2721,9 @@ class User(Base):
     __table_args__  = (
         {"extend_existing":True}
     )
-
+    
     id = Column(Integer, primary_key=True)
-
+    
     name = Column(String)
     initials = Column(String)
     email = Column(String)
@@ -2613,6 +2742,26 @@ class User(Base):
         """the equality operator
         """
         return isinstance(other, User) and self.name == other.name
+    
+    def __str__(self):
+        """The string representation of this User instance
+        """
+        return self.name
+    
+    def __repr__(self):
+        """The representation of this User
+        """
+        return "<User: %s>" % self.name
+    
+    def save(self):
+        """saves this User instance to the database
+        """
+        
+        if db.session is not None:
+            if self not in db.session:
+                db.session.add(self)
+            
+            db.session.commit()
 
 class EnvironmentBase(object):
     """Connects the environment (the host program) to the oyProjectManager.
@@ -2881,7 +3030,7 @@ class EnvironmentBase(object):
         """
         raise NotImplemented
 
-#    def update_versions(self, assetTupleList):
+#    def update_versions(self, version_tuple_list):
 #        """updates the assets to the latest versions
 #        """
 #        raise NotImplemented
@@ -2963,6 +3112,19 @@ class EnvironmentBase(object):
             instance holding the new version replacing the source one
         """
         raise NotImplemented
+    
+    def replace_external_paths(self, mode=0):
+        """Replaces the external paths (which are not starting with the
+        environment variable) with a proper path. The mode controls if the
+        resultant path should be absolute or relative to the project dir.
+        
+        :param mode: Controls the resultant path is absolute or relative.
+          
+          mode 0: absolute (a path which starts with $REPO)
+          mode 1: relative (to project path)
+        
+        :return:
+        """
 
 # secondary tables
 Version_References = Table(

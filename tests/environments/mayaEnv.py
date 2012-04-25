@@ -48,7 +48,7 @@ class MayaTester(unittest.TestCase):
         # version type
         self.asset_vtypes = db.query(VersionType).\
         filter(VersionType.type_for == "Asset").all()
-
+        
         self.shot_vtypes = db.query(VersionType).\
         filter(VersionType.type_for == "Shot").all()
 
@@ -118,7 +118,7 @@ class MayaTester(unittest.TestCase):
         # version.version_number
         
         render_version = pm.getAttr("defaultRenderGlobals.renderVersion")
-        self.assertEqual(render_version, "%03d" % self.version1.version_number)
+        self.assertEqual(render_version, "v%03d" % self.version1.version_number)
     
     def test_save_as_sets_the_render_format_to_exr_for_mentalray(self):
         """testing if the save_as method sets the render format to exr
@@ -218,8 +218,8 @@ class MayaTester(unittest.TestCase):
         )
     
     def test_save_as_replaces_file_image_paths(self):
-        """testing if save_as method replaces image paths with workspace
-        relative path
+        """testing if save_as method replaces image paths with REPO relative
+        path
         """
         
         self.mEnv.save_as(self.version1)
@@ -231,7 +231,6 @@ class MayaTester(unittest.TestCase):
         texture_path = os.path.join(
             pm.workspace.path, ".maya_files/textures/test.jpg"
         )
-#        file_node.setAttr("fileTextureName", texture_path)
         file_node.fileTextureName.set(texture_path)
         
         # save a newer version
@@ -243,59 +242,44 @@ class MayaTester(unittest.TestCase):
         # now check if the file nodes fileTextureName is converted to a
         # relative path to the current workspace
         
-        expected_path = utils.relpath(
-            pm.workspace.path,
-            texture_path,
-            "/", ".."
-        )
+        expected_path = texture_path.replace(os.environ["REPO"], "$REPO")
         
         self.assertEqual(
             file_node.getAttr("fileTextureName"),
             expected_path
         )
 
-    def test_save_as_replaces_mentalrayTexture_paths(self):
-        """testing if save_as method replaces mentalrayImage paths with
-        workspace relative path
-        """
-
-        self.mEnv.save_as(self.version1)
-
-        # create mentalrayTexture node
-        mentalrayTexture_node = pm.createNode("mentalrayTexture")
-
-        # set it to a path in the workspace
-        texture_path = os.path.join(
-            pm.workspace.path, ".maya_files/textures/test.jpg"
-        )
-        mentalrayTexture_node.setAttr("fileTextureName", texture_path)
-
-        # save a newer version
-        version2 = Version(**self.kwargs)
-        version2.save()
-
-        self.mEnv.save_as(version2)
-
-        # now check if the file nodes fileTextureName is converted to a
-        # relative path to the current workspace
-
-        expected_path = utils.relpath(
-            pm.workspace.path,
-            texture_path,
-            "/", ".."
-        )
-        
-        self.assertEqual(
-            mentalrayTexture_node.getAttr("fileTextureName"),
-            expected_path
-        )
-    
     def test_save_as_sets_the_resolution(self):
         """testing if save_as sets the render resolution for the current scene
         """
-        
+
         project = self.version1.project
 
+        width = 1920
+        height = 1080
+        pixel_aspect = 1.0
+
+        project.width = width
+        project.height = height
+        project.pixel_aspect = pixel_aspect
+        project.save()
+
+        # save the scene
+        self.mEnv.save_as(self.version1)
+
+        # check the resolutions
+        dRes = pm.PyNode("defaultResolution")
+        self.assertEqual(dRes.width.get(), width)
+        self.assertEqual(dRes.height.get(), height)
+        self.assertEqual(dRes.pixelAspect.get(), pixel_aspect)
+
+    def test_save_as_sets_the_resolution_only_for_first_version(self):
+        """testing if save_as sets the render resolution for the current scene
+        but only for the first version of the asset
+        """
+        
+        project = self.version1.project
+        
         width = 1920
         height = 1080
         pixel_aspect = 1.0
@@ -313,7 +297,26 @@ class MayaTester(unittest.TestCase):
         self.assertEqual(dRes.width.get(), width)
         self.assertEqual(dRes.height.get(), height)
         self.assertEqual(dRes.pixelAspect.get(), pixel_aspect)
-    
+        
+        # now change the resolution of the maya file
+        new_width = 1280
+        new_height = 720
+        new_pixel_aspect = 1.0
+        dRes.width.set(new_width)
+        dRes.height.set(new_height)
+        dRes.pixelAspect.set(new_pixel_aspect)
+        
+        # save the version again
+        new_version = Version(**self.kwargs)
+        new_version.save()
+        
+        self.mEnv.save_as(new_version)
+        
+        # test if the resolution is not changed
+        self.assertEqual(dRes.width.get(), new_width)
+        self.assertEqual(dRes.height.get(), new_height)
+        self.assertEqual(dRes.pixelAspect.get(), new_pixel_aspect)
+
     def test_save_as_fills_the_referenced_versions_list(self):
         """testing if the save_as method updates the Version.references list
         with the current references list from the Maya
@@ -326,7 +329,7 @@ class MayaTester(unittest.TestCase):
         versionBase = Version(**self.kwargs)
         versionBase.save()
         
-        # change the take naem
+        # change the take name
         self.kwargs["take_name"] = "Take1"
         version1 = Version(**self.kwargs)
         version1.save()
@@ -362,7 +365,99 @@ class MayaTester(unittest.TestCase):
         
         self.assertTrue(version1 in versionBase.references)
         self.assertTrue(version2 in versionBase.references)
-
+    
+    def test_save_as_references_to_a_version_in_same_workspace_are_replaced_with_abs_path_with_env_variable(self):
+        """testing if the save_as method updates the references paths with an
+        absolute path starting with conf.repository_env_key for references to
+        a version in the same project thus the referenced path is relative
+        """
+        
+        # create project
+        proj1 = Project("Proj1")
+        proj1.save()
+        proj1.create()
+        
+        # create assets
+        asset1 = Asset(proj1, "Asset 1")
+        asset1.save()
+        
+        # create a version of asset vtype 
+        vers1 = Version(asset1, asset1.code, self.asset_vtypes[0], self.user1)
+        vers1.save()
+        
+        # save it
+        self.mEnv.save_as(vers1)
+        
+        # new scene
+        pm.newFile(force=True)
+        
+        # create another version with different type
+        vers2 = Version(asset1, asset1.code, self.asset_vtypes[1], self.user1)
+        vers2.save()
+        
+        # reference the other version
+        self.mEnv.reference(vers1)
+        
+        # save it
+        self.mEnv.save_as(vers2)
+        
+        # now check if the referenced vers1 starts with $REPO
+        refs = pm.listReferences()
+        
+        # there should be only one ref
+        self.assertTrue(len(refs)==1)
+        
+        # and the path should start with conf.repository_env_key
+        self.assertTrue(
+            refs[0].unresolvedPath().startswith("$" + conf.repository_env_key)
+        )
+    
+    def test_save_as_of_a_scene_with_two_references_to_the_same_version(self):
+        """testing if the case where the current maya scene has two references
+        to the same file is gracefully handled by assigning the version only
+        once
+        """
+        
+        # create project
+        proj1 = Project("Proj1")
+        proj1.save()
+        proj1.create()
+        
+        # create assets
+        asset1 = Asset(proj1, "Asset 1")
+        asset1.save()
+        
+        # create a version of asset vtype 
+        vers1 = Version(asset1, asset1.code, self.asset_vtypes[0], self.user1)
+        vers1.save()
+        
+        # save it
+        self.mEnv.save_as(vers1)
+        
+        # new scene
+        pm.newFile(force=True)
+        
+        # create another version with different type
+        vers2 = Version(asset1, asset1.code, self.asset_vtypes[1], self.user1)
+        vers2.save()
+        
+        # reference the other version twice
+        self.mEnv.reference(vers1)
+        self.mEnv.reference(vers1)
+        
+        # save it and expect no InvalidRequestError
+        self.mEnv.save_as(vers2)
+        
+        print vers2.references
+        
+        self.mEnv.reference(vers1)
+        vers3 = Version(asset1, asset1.code, self.asset_vtypes[1], self.user1)
+        vers3.save()
+ 
+        self.mEnv.save_as(vers3)
+        
+        
+    
     def test_open_updates_the_referenced_versions_list(self):
         """testing if the open method updates the Version.references list with
         the current references list from the Maya
@@ -521,8 +616,8 @@ class MayaTester(unittest.TestCase):
         file_texture1 = pm.createNode("file")
         file_texture2 = pm.createNode("file")
         
-        path1 = ".maya_files/TEXTURES/a.jpg"
-        path2 = ".maya_files/TEXTURES/b.jpg"
+        path1 = os.path.dirname(version1.path) +  "/.maya_files/TEXTURES/a.jpg"
+        path2 = os.path.dirname(version1.path) +  "/.maya_files/TEXTURES/b.jpg"
         
         # set them to some relative paths
         file_texture1.fileTextureName.set(path1)
@@ -552,12 +647,12 @@ class MayaTester(unittest.TestCase):
         # check if the paths are updated
         self.assertEqual(
             file_texture1.fileTextureName.get(),
-            "../Asset_1/.maya_files/TEXTURES/a.jpg"
+            "$REPO/TEST_PROJECT/Assets/Asset_1/.maya_files/TEXTURES/a.jpg"
         )
 
         self.assertEqual(
             file_texture2.fileTextureName.get(),
-            "../Asset_1/.maya_files/TEXTURES/b.jpg"
+            "$REPO/TEST_PROJECT/Assets/Asset_1/.maya_files/TEXTURES/b.jpg"
         )
     
     def test_save_as_sets_the_fps(self):
@@ -616,3 +711,101 @@ class MayaTester(unittest.TestCase):
             self.mEnv.get_fps(),
             30
         )
+    
+    def test_reference_creates_references_with_paths_starting_with_repository_env_key(self):
+        """testing if reference method creates references with unresolved paths
+        starting with conf.repository_env_key
+        """
+
+        proj1 = Project("Test Project 1")
+        proj1.create()
+        proj1.save()
+
+        asset1 = Asset(proj1, "Test Asset 1")
+        asset1.save()
+
+        vers1 = Version(asset1, asset1.code, self.asset_vtypes[0], self.user1)
+        vers1.save()
+
+        vers2 = Version(asset1, asset1.code, self.asset_vtypes[0], self.user1)
+        vers2.save()
+
+        self.mEnv.save_as(vers1)
+
+        pm.newFile(force=True)
+
+        self.mEnv.save_as(vers2)
+
+        # refence vers1 to vers2
+        self.mEnv.reference(vers1)
+
+        # now check if the referenced files unresolved path is already starting
+        # with conf.repository_env_key
+
+        refs = pm.listReferences()
+
+        # there should be only one reference
+        self.assertEqual(len(refs), 1)
+
+        # the unresolved path should start with $REPO
+        self.assertTrue(
+            refs[0].unresolvedPath().startswith("$" + conf.repository_env_key)
+        )
+
+        self.assertTrue(refs[0].isLoaded())
+
+    def test_reference_creates_references_to_Versions_in_other_workspaces_loaded(self):
+        """testing if reference method creates references to Versions with
+        different VersionType and the reference state will be loaded
+        """
+        
+        proj1 = Project("Test Project 1")
+        proj1.create()
+        proj1.save()
+    
+        asset1 = Asset(proj1, "Test Asset 1")
+        asset1.save()
+    
+        vers1 = Version(asset1, asset1.code, self.asset_vtypes[0], self.user1)
+        vers1.save()
+    
+        vers2 = Version(asset1, asset1.code, self.asset_vtypes[1], self.user1)
+        vers2.save()
+    
+        self.mEnv.save_as(vers1)
+    
+        pm.newFile(force=True)
+    
+        self.mEnv.save_as(vers2)
+    
+        # refence vers1 to vers2
+        self.mEnv.reference(vers1)
+    
+        # now check if the referenced files unresolved path is already starting
+        # with conf.repository_env_key
+        
+        refs = pm.listReferences()
+    
+        # there should be only one reference
+        self.assertEqual(len(refs), 1)
+    
+        # the unresolved path should start with $REPO
+        self.assertTrue(
+            refs[0].unresolvedPath().startswith("$" + conf.repository_env_key)
+        )
+        
+        self.assertTrue(refs[0].isLoaded())
+    
+    def test_save_as_replaces_imagePlane_filename_with_env_variable(self):
+        """testing if save_as replaces the imagePlane filename with repository
+        environment variable
+        """
+        
+        # create a camera
+        # create an image plane
+        # set it to something
+        # save the scene
+        # check if the path is replaced with repository environment variable
+        
+        self.fail("test is not implemented yet")
+    

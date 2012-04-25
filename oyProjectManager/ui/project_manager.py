@@ -4,19 +4,31 @@
 # This module is part of oyProjectManager and is released under the BSD 2
 # License: http://www.opensource.org/licenses/BSD-2-Clause
 
+import os
 import sys
-
-#from PySide import QtGui, QtCore
-import sip
-sip.setapi('QString', 2)
-sip.setapi('QVariant', 2)
-from PyQt4 import QtGui, QtCore
 
 import oyProjectManager
 from oyProjectManager import db
 from oyProjectManager.ui import project_properties
-import project_manager_UI
 from oyProjectManager.core.models import Project, Sequence, Shot
+
+
+qt_module_key = "PREFERRED_QT_MODULE"
+qt_module = "PyQt4"
+
+if os.environ.has_key(qt_module_key):
+    qt_module = os.environ[qt_module_key]
+
+if qt_module == "PySide":
+    from PySide import QtGui, QtCore
+    from oyProjectManager.ui import project_manager_UI_pyside as project_manager_UI
+elif qt_module == "PyQt4":
+    import sip
+    sip.setapi('QString', 2)
+    sip.setapi('QVariant', 2)
+    from PyQt4 import QtGui, QtCore
+    from oyProjectManager.ui import project_manager_UI_pyqt4 as project_manager_UI
+
 
 def UI():
     """the UI to call the dialog by itself
@@ -137,6 +149,13 @@ class MainDialog(QtGui.QDialog, project_manager_UI.Ui_dialog):
             self.new_shots_pushButton,
             QtCore.SIGNAL("clicked()"),
             self.new_shots_pushButton_clicked
+        )
+        
+        # create_project_structure_pushButton
+        QtCore.QObject.connect(
+            self.create_project_structure_pushButton,
+            QtCore.SIGNAL("clicked()"),
+            self.create_project_structure
         )
 
     def _set_defaults(self):
@@ -322,3 +341,12 @@ class MainDialog(QtGui.QDialog, project_manager_UI.Ui_dialog):
                 
                 # update the shots_comboBox
                 self.update_shots_comboBox()
+    
+    def create_project_structure(self):
+        """runs when the create_project_structure_pushButton has been clicked
+        """
+        
+        proj = self.get_current_project()
+        
+        if proj:
+            proj.create()
