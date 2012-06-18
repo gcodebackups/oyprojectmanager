@@ -46,7 +46,7 @@ elif qt_module == "PyQt4":
     from oyProjectManager.ui import version_creator_UI_pyqt4 as version_creator_UI
     from oyProjectManager.ui import create_asset_dialog_UI_pyqt4 as create_asset_dialog_UI
 
-def UI(environment, skip_exec=None):
+def UI(environment):
     """the UI to call the dialog by itself
     """
     global app
@@ -67,12 +67,8 @@ def UI(environment, skip_exec=None):
     mainDialog = MainDialog(environment)
     mainDialog.show()
     #app.setStyle('Plastique')
-    if not skip_exec:
-        #app = QtGui.QApplication([])
-        pass
     
     app.exec_()
-    
     if self_quit:
         app.connect(
             app,

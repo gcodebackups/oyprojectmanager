@@ -13,7 +13,6 @@ import PeyeonScript
 from oyProjectManager.core.models import EnvironmentBase
 from oyProjectManager import utils
 
-
 class Fusion(EnvironmentBase):
     """the fusion environment class
     """
@@ -226,11 +225,12 @@ class Fusion(EnvironmentBase):
     def __init__(self, version=None, name='', extensions=None):
         """fusion specific init
         """
+
         # and add you own modifications to __init__
         self.fusion = PeyeonScript.scriptapp("Fusion")
         self.fusion_prefs = self.fusion.GetPrefs()['Global']
         
-        self.comp = comp # the global variable
+        self.comp = self.fusion.GetCurrentComp()
         self.comp_prefs = self.comp.GetPrefs()['Comp']
         
         self._main_output_node_name = "MAIN_OUTPUT"
