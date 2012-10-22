@@ -411,7 +411,7 @@ class Maya(EnvironmentBase):
         
         # image folder from the workspace.mel
         # {{project.full_path}}/Sequences/{{seqence.code}}/Shots/{{shot.code}}/.maya_files/RENDERED_IMAGES
-        image_folder_from_ws = pm.workspace.fileRules['image'] 
+        image_folder_from_ws = pm.workspace.fileRules['image']
         image_folder_from_ws_full_path = os.path.join(
             os.path.dirname(version.path),
             image_folder_from_ws
