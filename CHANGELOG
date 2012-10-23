@@ -1,6 +1,17 @@
 Version History
 ===============
 
+0.2.5.3
+-------
+
+* Fixed mayaEnv.Maya, it was trying to convert None to absolute path when
+  checking for external paths.
+
+* Added post_open() to houdiniEnv.Houdini.
+
+* In version_updater the column label "Latest" is changed to
+  "Latest Published" to make it clear.
+
 0.2.5.2
 -------
 

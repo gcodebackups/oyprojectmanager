@@ -275,6 +275,11 @@ class EnvironmentBase(object):
         """
         raise NotImplemented
 
+    def post_open(self, version):
+        """Runs after opening a file
+        """
+        raise NotImplemented
+
     def import_(self, asset):
         """the import action
         """

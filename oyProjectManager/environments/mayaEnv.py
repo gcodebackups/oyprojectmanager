@@ -592,25 +592,34 @@ class Maya(EnvironmentBase):
         # check for file textures
         for file_texture in pm.ls(type=pm.nt.File):
             path = file_texture.attr('fileTextureName').get()
-            if os.path.isabs(path) and not is_in_repo(path):
+            if path is not None \
+               and os.path.isabs(path) \
+               and not is_in_repo(path):
                 external_nodes.append(file_texture)
         
         # check for mentalray textures
         for mr_texture in pm.ls(type=pm.nt.MentalrayTexture):
             path = mr_texture.attr('fileTextureName').get()
-            if os.path.isabs(path) and not is_in_repo(path):
+            logger.debug("path of %s: %s" % (mr_texture, path))
+            if path is not None \
+               and os.path.isabs(path) \
+               and not is_in_repo(path):
                 external_nodes.append(mr_texture)
         
         # check for ImagePlanes
         for image_plane in pm.ls(type=pm.nt.ImagePlane):
             path = image_plane.attr('imageName').get()
-            if os.path.isabs(path) and not is_in_repo(path):
+            if path is not None \
+               and os.path.isabs(path) \
+               and not is_in_repo(path):
                 external_nodes.append(image_plane)
         
         # check for IBL nodes
         for ibl in pm.ls(type=pm.nt.MentalrayIblShape):
             path = ibl.attr('texture').get()
-            if os.path.isabs(path) and not is_in_repo(path):
+            if path is not None \
+               and os.path.isabs(path) \
+               and not is_in_repo(path):
                 external_nodes.append(ibl)
         
         if external_nodes:

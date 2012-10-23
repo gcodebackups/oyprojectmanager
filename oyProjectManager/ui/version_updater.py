@@ -77,7 +77,7 @@ class MainDialog(QtGui.QDialog, version_updater_UI.Ui_Dialog):
             'Type',
             'Take',
             'Current',
-            'Latest',
+            'Latest Published',
             'Do Update?'
         ]
         
