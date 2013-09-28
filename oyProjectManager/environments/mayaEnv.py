@@ -467,11 +467,11 @@ class Maya(EnvironmentBase):
         """
         dRG = pm.PyNode('defaultRenderGlobals')
         
-        # check if Mentalray is the current renderer
-        if dRG.getAttr('currentRenderer') == 'mentalRay':
+        currentRenderer = dRG.currentRenderer.get()
+        if currentRenderer == 'mentalRay':
             # set the render output to OpenEXR with zip compression
-            dRG.setAttr('imageFormat', 51)
-            dRG.setAttr('imfkey','exr')
+            dRG.imageFormat.set(51)
+            dRG.imfkey.set('exr')
             # check the maya version and set it if maya version is equal or
             # greater than 2012
             import pymel
@@ -483,25 +483,32 @@ class Maya(EnvironmentBase):
                         # the renderer is set to mentalray but it is not loaded
                         # so there is no mentalrayGlobals
                         # create them
-                        
+
                         # dirty little maya tricks
                         pm.mel.miCreateDefaultNodes()
-                        
+
                         # get it again
                         mrG = pm.PyNode("mentalrayGlobals")
-                    
-                    mrG.setAttr("imageCompression", 4)
+
+                    mrG.imageCompression.set(4)
             except AttributeError, pm.general.MayaNodeError:
                 pass
-            
+
             # if the renderer is not registered this causes a _objectError
             # and the frame buffer to 16bit half
             try:
                 miDF = pm.PyNode('miDefaultFramebuffer')
-                miDF.setAttr('datatype', 16)
+                miDF.datatype.set(16)
             except TypeError, pm.general.MayaNodeError:
                 # just don't do anything
                 pass
+        elif currentRenderer == 'arnold':
+            dRG.imageFormat.set(51) # exr
+            dAD = pm.PyNode('defaultArnoldDriver')
+            dAD.exrCompression.set(3) # zip
+            dAD.halfPrecision.set(1) # half
+            dAD.tiled.set(0) # scanline (not tiled)
+            dAD.autocrop.set(1) # will enhance file load times in Nuke
         
         
         ## check all the render layers and try to get if any of them are using
