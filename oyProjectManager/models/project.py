@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2009-2012, Erkan Ozgur Yilmaz
+# Copyright (c) 2009-2014, Erkan Ozgur Yilmaz
 # 
 # This module is part of oyProjectManager and is released under the BSD 2
 # License: http://www.opensource.org/licenses/BSD-2-Clause
@@ -101,18 +101,18 @@ class Project(Base):
     
     ver_number_prefix = Column(String(16))
     ver_number_padding = Column(Integer)
-    
+
     fps = Column(
         Integer,
         doc="""The frames per second setting of this project. The default value
         is 25   
         """
     )
-    
+
     width = Column(Integer)
     height = Column(Integer)
     pixel_aspect = Column(Float)
-    
+
     #structure = Column(PickleType)
     structure = Column(String)
     
@@ -121,13 +121,13 @@ class Project(Base):
         primaryjoin="Sequences.c.project_id==Projects.c.id",
         cascade="all, delete-orphan"
     )
-    
+
     client_id = Column(Integer, ForeignKey("Clients.id"))
     client = relationship(
         "Client",
         primaryjoin="Projects.c.client_id==Clients.c.id"
     )
-    
+
     def __new__(cls, name=None, code=None, client=None):
         """the overridden __new__ method to manage the creation of a Project
         instances.

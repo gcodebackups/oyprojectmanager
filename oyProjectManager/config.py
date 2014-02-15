@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
-# Copyright (c) 2009-2012, Erkan Ozgur Yilmaz
-# 
+# Copyright (c) 2009-2014, Erkan Ozgur Yilmaz
+#
 # This module is part of oyProjectManager and is released under the BSD 2
 # License: http://www.opensource.org/licenses/BSD-2-Clause
 
@@ -9,75 +9,76 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
 class Config(object):
     """Config abstraction
-    
+
     Idea is coming from Sphinx config.
-    
+
     Holds system wide configuration variables. See
     `configuring oyProjectManager`_ for more detail.
-    
+
     .. _configuring oyProjectManager: ../configure.html
     """
-    
+
     default_config_values = dict(
-        
-        database_url = "sqlite:///$OYPROJECTMANAGER_PATH/project_manager.db",
-        
-        status_list = [
+
+        database_url="sqlite:///$OYPROJECTMANAGER_PATH/project_manager.db",
+
+        status_list=[
             'WTS',
             'WIP',
             'REV',
             'APP',
             'CMP'
         ],
-        
-        status_list_long_names = [
+
+        status_list_long_names=[
             'Waiting To Start',
             'Work In Progress',
             'For Review',
             'Approved',
             'Completed'
         ],
-        
-        status_bg_colors = [
-            (192,  80,  77), #WTS
-            (255, 192,   0), #WIP
-            ( 89, 141, 213), #REV
-            (155, 187,  89), #APP
-            (155, 187,  89), #CMP
+
+        status_bg_colors=[
+            (192, 80, 77),  #WTS
+            (255, 192, 0),  #WIP
+            ( 89, 141, 213),  #REV
+            (155, 187, 89),  #APP
+            (155, 187, 89),  #CMP
         ],
-        
-        status_fg_colors = [
-            (255, 255, 255), #WTS
-            (  0,   0,   0), #WIP
-            (  0,   0,   0), #REV
-            (  0,   0,   0), #APP
-            (  0,   0,   0), #CMP
+
+        status_fg_colors=[
+            (255, 255, 255),  #WTS
+            (  0, 0, 0),  #WIP
+            (  0, 0, 0),  #REV
+            (  0, 0, 0),  #APP
+            (  0, 0, 0),  #CMP
         ],
-        
-        sequence_format = "%h%p%t %R",
-        
-        shot_number_prefix = "SH",
-        shot_number_padding = 3,
-        
-        rev_number_prefix = "r",
-        rev_number_padding = 2,
-        
-        ver_number_prefix = "v",
-        ver_number_padding = 3,
-        
-        default_fps = 25,
-        
-        default_asset_type_name = "Generic",
-        default_take_name = "Main",
-        
-        users_data = [{"name": "Administrator", "initials": "adm"}],
-        
+
+        sequence_format="%h%p%t %R",
+
+        shot_number_prefix="SH",
+        shot_number_padding=3,
+
+        rev_number_prefix="r",
+        rev_number_padding=2,
+
+        ver_number_prefix="v",
+        ver_number_padding=3,
+
+        default_fps=25,
+
+        default_asset_type_name="Generic",
+        default_take_name="Main",
+
+        users_data=[{"name": "Administrator", "initials": "adm"}],
+
         # just use one repository for now
-        repository_env_key = "REPO",
-        
-        repository = {
+        repository_env_key="REPO",
+
+        repository={
             "name": "Default",
             "windows_path": "~/Projects",
             "linux_path": "~/Projects",
@@ -85,38 +86,38 @@ class Config(object):
         },
 
 
-        file_size_format = "%.2f MB",
-        time_format = '%d.%m.%Y %H:%M',
+        file_size_format="%.2f MB",
+        time_format='%d.%m.%Y %H:%M',
 
-        environments = [
+        environments=[
             {
-                "name":"Maya",
-                "extensions":["ma", "mb"]
+                "name": "Maya",
+                "extensions": ["ma", "mb"]
             },
             {
-                "name":"Houdini",
-                "extensions":["hip"]
+                "name": "Houdini",
+                "extensions": ["hip"]
             },
             {
-                "name":"Nuke",
+                "name": "Nuke",
                 "extensions": ["nk"],
             },
             {
-                "name":"Photoshop",
+                "name": "Photoshop",
                 "extensions": ["psd", "pdd"],
                 "export_extensions": ["tif", "tga", "bmp", "jpg", "iff"],
             },
             {
-                "name":"3DEqualizer",
+                "name": "3DEqualizer",
                 "extensions": ["3te"]
             },
             {
-                "name":"Fusion",
+                "name": "Fusion",
                 "extensions": ["comp"]
             }
         ],
-        
-        resolution_presets = {
+
+        resolution_presets={
             "PC Video": [640, 480, 1.0],
             "NTSC": [720, 486, 0.91],
             "NTSC 16:9": [720, 486, 1.21],
@@ -142,10 +143,10 @@ class Config(object):
             "3k Square": [3072, 3072, 1.0],
             "4k Square": [4096, 4096, 1.0],
         },
-        
-        default_resolution_preset = "HD 1080",
-        
-        project_structure = """{% for sequence in project.sequences %}
+
+        default_resolution_preset="HD 1080",
+
+        project_structure="""{% for sequence in project.sequences %}
             {% set seq_path = project.full_path + '/Sequences/' + sequence.code %}
             {{seq_path}}/Edit/Offline
             {{seq_path}}/Edit/Sound
@@ -169,18 +170,18 @@ class Config(object):
             {{asset_path}}/Reference
         {% endfor %}
         """,
-        
-        asset_thumbnail_path = "{{project.code}}/Assets/{{asset.type}}/{{asset.code}}/Thumbnail",
-        asset_thumbnail_filename = "{{asset.code}}_thumbnail.{{extension}}",
-        
-        shot_thumbnail_path = "{{project.code}}/Sequences/{{sequence.code}}/Shots/{{shot.code}}/Thumbnail",
-        shot_thumbnail_filename = "{{shot.code}}_thumbnail.{{extension}}",
-        
-        thumbnail_format = "jpg",
-        thumbnail_quality = 70,
-        thumbnail_size = [320, 180],
-        
-        version_types = [
+
+        asset_thumbnail_path="{{project.code}}/Assets/{{asset.type}}/{{asset.code}}/Thumbnail",
+        asset_thumbnail_filename="{{asset.code}}_thumbnail.{{extension}}",
+
+        shot_thumbnail_path="{{project.code}}/Sequences/{{sequence.code}}/Shots/{{shot.code}}/Thumbnail",
+        shot_thumbnail_filename="{{shot.code}}_thumbnail.{{extension}}",
+
+        thumbnail_format="jpg",
+        thumbnail_quality=70,
+        thumbnail_size=[320, 180],
+
+        version_types=[
             {
                 "name": "Animation",
                 "code": "Anim",
@@ -211,18 +212,18 @@ class Config(object):
                 "environments": ["Nuke", "Fusion"],
                 "type_for": "Shot"
             },
-#            {
-#                "name": "Edit",
-#                "code": "Edit",
-#                "path": "{{project.code}}/Sequences/{{sequence.code}}/Shots/{{version.base_name}}/{{type.code}}",
-#                "filename": "{{version.base_name}}_{{version.take_name}}_{{type.code}}_v{{'%03d'|format(version.version_number)}}{{version.extension}}",
-#                "output_path": "{{version._path}}/Output/{{version.take_name}}",
-#                "extra_folders": "",
-#                "environments": ["Nuke", "Fusion"],
-#                "type_for": "Shot"
-#            },
+            #            {
+            #                "name": "Edit",
+            #                "code": "Edit",
+            #                "path": "{{project.code}}/Sequences/{{sequence.code}}/Shots/{{version.base_name}}/{{type.code}}",
+            #                "filename": "{{version.base_name}}_{{version.take_name}}_{{type.code}}_v{{'%03d'|format(version.version_number)}}{{version.extension}}",
+            #                "output_path": "{{version._path}}/Output/{{version.take_name}}",
+            #                "extra_folders": "",
+            #                "environments": ["Nuke", "Fusion"],
+            #                "type_for": "Shot"
+            #            },
             {
-                "name":"FX",
+                "name": "FX",
                 "code": "FX",
                 "path": "{{project.code}}/Sequences/{{sequence.code}}/Shots/{{version.base_name}}/{{type.code}}",
                 "filename": "{{version.base_name}}_{{version.take_name}}_{{type.code}}_v{{'%03d'|format(version.version_number)}}{{version.extension}}",
@@ -234,7 +235,7 @@ class Config(object):
                 "type_for": "Shot"
             },
             {
-                "name":"Model",
+                "name": "Model",
                 "code": "Model",
                 "path": "{{project.code}}/Assets/{{asset.type}}/{{version.base_name}}/{{type.code}}",
                 "filename": "{{version.base_name}}_{{version.take_name}}_{{type.code}}_v{{'%03d'|format(version.version_number)}}{{version.extension}}",
@@ -250,7 +251,8 @@ class Config(object):
                 "filename": "{{version.base_name}}_{{version.take_name}}_{{type.code}}_v{{'%03d'|format(version.version_number)}}{{version.extension}}",
                 "output_path": "{{version._path}}/Output/{{version.take_name}}",
                 "extra_folders": "",
-                "environments": ["Maya", "Houdini", "Nuke", "Fusion", "Photoshop"],
+                "environments": ["Maya", "Houdini", "Nuke", "Fusion",
+                                 "Photoshop"],
                 "type_for": "Asset"
             },
             {
@@ -296,7 +298,7 @@ class Config(object):
             {
                 "name": "Layout",
                 "code": "Layout",
-                "path":"{{project.code}}/Sequences/{{sequence.code}}/Shots/{{version.base_name}}/{{type.code}}",
+                "path": "{{project.code}}/Sequences/{{sequence.code}}/Shots/{{version.base_name}}/{{type.code}}",
                 "filename": "{{version.base_name}}_{{version.take_name}}_{{type.code}}_v{{'%03d'|format(version.version_number)}}{{version.extension}}",
                 "output_path": "{{version._path}}/Output/{{version.take_name}}",
                 "extra_folders": "",
@@ -354,8 +356,8 @@ class Config(object):
                 "type_for": "Shot"
             }
         ],
-        
-        maya_workspace_file_content = """workspace -fr "3dPaintTextures" ".mayaFiles/sourceimages/3dPaintTextures/";
+
+        maya_workspace_file_content="""workspace -fr "3dPaintTextures" ".mayaFiles/sourceimages/3dPaintTextures/";
 workspace -fr "Adobe(R) Illustrator(R)" ".mayaFiles/data/";
 workspace -fr "aliasWire" ".mayaFiles/data/";
 workspace -fr "animImport" ".mayaFiles/data/";
@@ -413,37 +415,37 @@ workspace -fr "textures" ".mayaFiles/images/";
 workspace -fr "translatorData" ".mayaFiles/data/";
 """
     )
-    
+
     def __init__(self):
-        
+
         self.config_values = Config.default_config_values.copy()
         self.user_config = {}
-        
+
         # the priority order is
         # oyProjectManager.config
         # config.py under .oyrc directory
         # config.py under $OYPROJECTMANAGER_PATH
-        
+
         self._parse_settings()
-    
+
     def _parse_settings(self):
         # for now just use $OYPROJECTMANAGER_PATH
         ENV_KEY = "OYPROJECTMANAGER_PATH"
-        
+
         # try to get the environment variable
         if not os.environ.has_key(ENV_KEY):
             # don't do anything
             logger.debug("no environment key found for user settings")
         else:
             logger.debug("environment key found")
-            
+
             resolved_path = os.path.expanduser(
                 os.path.join(
                     os.environ[ENV_KEY],
                     "config.py"
                 )
             )
-            
+
             # using `while` is not safe to expand variables
             # do the expansion for 5 times which is complex enough
             # and I don't (hopefully) expect anybody to use
@@ -457,7 +459,7 @@ workspace -fr "translatorData" ".mayaFiles/data/";
                     )
                 )
             )
-            
+
             try:
                 try:
                     logger.debug("importing user config")
@@ -465,51 +467,51 @@ workspace -fr "translatorData" ".mayaFiles/data/";
                 except SyntaxError, err:
                     raise RuntimeError("There is a syntax error in your "
                                        "configuration file: " + str(err))
-                
+
                 # append the data to the current settings
                 logger.debug("updating system config")
                 for key in self.user_config:
                     if key in self.config_values:
                         self.config_values[key] = self.user_config[key]
-            
+
             except IOError:
                 logger.warning("The $OYPROJETMANAGER_PATH:" + resolved_path + \
                                " doesn't exists! skipping user config")
-    
+
     def __getattr__(self, name):
         return self.config_values[name]
-    
+
     def __getitem__(self, name):
         return getattr(self, name)
-    
+
     def __setitem__(self, name, value):
         return setattr(self, name, value)
-    
+
     def __delitem__(self, name):
         delattr(self, name)
-    
+
     def __contains__(self, name):
         return name in self.config_values
-    
+
     @property
     def last_user_id(self):
         """returns the last user id
-        
+
         It is not very much related with the config.py and user settings, but
         it seems the most appropriate place is this one to get information from
         individual users.
-        
+
         This should work fairly fast, because it uses the local filesystem not
         the network thus the fileserver.
         """
         # TODO: This should be replaced with beaker.session
-        
+
         file_name = 'last_user_id'
         file_path = os.path.expanduser("~/.oypmrc/")
         file_full_path = os.path.join(file_path, file_name)
-        
+
         last_user_id = None
-        
+
         try:
             last_user_file = open(file_full_path)
         except IOError:
@@ -517,29 +519,29 @@ workspace -fr "translatorData" ".mayaFiles/data/";
         else:
             last_user_id = int(last_user_file.readline().strip())
             last_user_file.close()
-        
+
         return last_user_id
-        
+
     @last_user_id.setter
     def last_user_id(self, user_id):
         """sets the user id for the last user
         """
         if not isinstance(user_id, int):
             raise RuntimeWarning("user_id for last_user_id should be an int")
-        
+
         file_name = 'last_user_id'
         file_path = os.path.expanduser("~/.oypmrc/")
         file_full_path = os.path.join(file_path, file_name)
-        
+
         logger.debug("saving user id to %s" % file_full_path)
-        
+
         # create the folder first
         try:
             os.makedirs(file_path)
         except OSError:
             # already created
             pass
-        
+
         try:
             last_user_file = open(file_full_path, 'w')
         except IOError as e:
